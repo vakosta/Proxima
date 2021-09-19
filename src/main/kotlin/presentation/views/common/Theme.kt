@@ -1,4 +1,4 @@
-package org.jetbrains.codeviewer.ui.common
+package presentation.views.common
 
 import androidx.compose.material.darkColors
 import androidx.compose.ui.graphics.Color
