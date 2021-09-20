@@ -8,7 +8,10 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerIcon
 import androidx.compose.ui.input.pointer.pointerMoveFilter
+import java.awt.Cursor
 
 fun Modifier.pointerMoveFilter(
     onEnter: () -> Boolean,
@@ -23,5 +26,13 @@ fun Modifier.cursorForHorizontalResize(): Modifier = composed {
     pointerMoveFilter(
         onEnter = { isHover = true; true },
         onExit = { isHover = false; true }
+    ).pointerIcon(
+        PointerIcon(
+            if (isHover) {
+                Cursor(Cursor.E_RESIZE_CURSOR)
+            } else {
+                Cursor.getDefaultCursor()
+            }
+        )
     )
 }
