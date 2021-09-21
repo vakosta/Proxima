@@ -38,7 +38,7 @@ class SkijaBuilder(
         for (i in content.indices) {
             val c: Char = content[i]
             if (carriagePosition == i) {
-                canvas.drawLine(x, y - font.metrics.height, x, y + font.metrics.descent, paint)
+                drawCarriage(canvas, paint)
             }
             if (c != '\n') {
                 addChar(c, canvas, paint)
@@ -47,7 +47,7 @@ class SkijaBuilder(
             }
         }
         if (carriagePosition == content.length) {
-            canvas.drawLine(x, y - font.metrics.height, x, y + font.metrics.descent, paint)
+            drawCarriage(canvas, paint)
         }
     }
 
@@ -66,10 +66,16 @@ class SkijaBuilder(
         x += (textLine.width + 1).toInt()
     }
 
+    private fun drawCarriage(
+        canvas: Canvas,
+        paint: Paint,
+    ) {
+        canvas.drawLine(x, y + font.metrics.ascent, x, y + font.metrics.descent, paint)
+    }
 
     companion object {
-        private const val BASE_X = 3F
-        private const val BASE_Y = 20F
+        private const val BASE_X = 5F
+        private const val BASE_Y = 23F
 
         private const val FONT_PATH = "./src/main/resources/fonts/jetbrainsmono/JetBrainsMono-Regular.ttf"
 
@@ -78,7 +84,7 @@ class SkijaBuilder(
             get() {
                 if (_font == null) {
                     val typeface = Typeface.makeFromFile(FONT_PATH)
-                    _font = Font(typeface, 16F)
+                    _font = Font(typeface, 14F)
                 }
                 return _font!!
             }
