@@ -11,6 +11,8 @@ import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.WindowSize
 import androidx.compose.ui.window.WindowState
 import domain.skija.SkijaBuilder
+import presentation.model.File
+import presentation.model.getFile
 import presentation.utils.isRelevant
 import kotlin.math.max
 import kotlin.math.min
@@ -21,6 +23,8 @@ class MainWindowState(
     override var position: WindowPosition = WindowPosition.PlatformDefault,
     override var size: WindowSize = WindowSize(800.dp, 600.dp),
 ) : WindowState {
+
+    val fileTreeState = FileTree(File("Kek", true, listOf(getFile(), getFile(), getFile()), true))
 
     private var fileContent = StringBuilder("")
     private var carriagePosition = 0

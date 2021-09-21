@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.Icon
 import androidx.compose.material.LocalContentColor
-import androidx.compose.material.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowForward
@@ -27,6 +26,7 @@ import presentation.states.MainWindowState
 import presentation.states.PanelState
 import presentation.utils.VerticalSplittable
 import presentation.views.CodeView
+import presentation.views.FileTreeView
 
 @Composable
 fun MainWindow(state: MainWindowState) = Window(
@@ -52,7 +52,7 @@ fun MainWindow(state: MainWindowState) = Window(
         }
     ) {
         ResizablePanel(Modifier.width(animatedSize).fillMaxHeight(), state.panelState) {
-            Text("321")
+            FileTreeView(state.fileTreeState)
         }
         CodeView(
             code = state.fileContentRendered,
