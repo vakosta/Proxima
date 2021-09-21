@@ -35,10 +35,10 @@ fun MainWindow(state: MainWindowState) = Window(
     onKeyEvent = { state.onKeyEvent(it) }
 ) {
     val animatedSize = if (state.panelState.splitter.isResizing) {
-        state.panelState.panelSize
+        state.panelState.size
     } else {
         animateDpAsState(
-            state.panelState.panelSize,
+            state.panelState.size,
             SpringSpec(stiffness = Spring.StiffnessLow)
         ).value
     }

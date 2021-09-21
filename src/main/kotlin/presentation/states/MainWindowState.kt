@@ -22,11 +22,18 @@ class MainWindowState(
     override var size: WindowSize = WindowSize(800.dp, 600.dp),
 ) : WindowState {
 
-    private var fileContent = ""
+    private var fileContent = StringBuilder("")
     private var carriagePosition = 0
 
     val panelState by mutableStateOf(PanelState())
-    var fileContentRendered by mutableStateOf(SkijaBuilder(fileContent, carriagePosition, 300, 300).buildView())
+    var fileContentRendered by mutableStateOf(
+        SkijaBuilder(
+            fileContent.toString(),
+            carriagePosition,
+            300,
+            300
+        ).buildView()
+    )
 
     fun onKeyEvent(keyEvent: KeyEvent): Boolean {
         if (keyEvent.isRelevant()) {
@@ -37,7 +44,7 @@ class MainWindowState(
     }
 
     fun updateRenderedContent(width: Int, height: Int) {
-        fileContentRendered = SkijaBuilder(fileContent, carriagePosition, width, height).buildView()
+        fileContentRendered = SkijaBuilder(fileContent.toString(), carriagePosition, width, height).buildView()
     }
 
     private fun handleKeyEvent(keyEvent: KeyEvent) {
@@ -62,12 +69,12 @@ class MainWindowState(
     }
 
     private fun onPressedBackspace() {
-        fileContent = fileContent.dropLast(1)
-        carriagePosition = fileContent.length
+        fileContent = fileContent.deleteCharAt(carriagePosition - 1)
+        carriagePosition--
     }
 
     private fun onTypedChar(char: Char) {
-        fileContent = fileContent.plus(char)
-        carriagePosition = fileContent.length
+        fileContent = fileContent.insert(carriagePosition, char)
+        carriagePosition++
     }
 }

@@ -4,7 +4,6 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import org.jetbrains.skija.Canvas
 import org.jetbrains.skija.Font
-import org.jetbrains.skija.FontStyle
 import org.jetbrains.skija.Paint
 import org.jetbrains.skija.Surface
 import org.jetbrains.skija.TextLine
@@ -70,13 +69,15 @@ class SkijaBuilder(
 
     companion object {
         private const val BASE_X = 3F
-        private const val BASE_Y = 15F
+        private const val BASE_Y = 20F
+
+        private const val FONT_PATH = "./src/main/resources/fonts/jetbrainsmono/JetBrainsMono-Regular.ttf"
 
         private var _font: Font? = null
         private val font: Font
             get() {
                 if (_font == null) {
-                    val typeface = Typeface.makeFromName("Consolas", FontStyle.NORMAL)
+                    val typeface = Typeface.makeFromFile(FONT_PATH)
                     _font = Font(typeface, 16F)
                 }
                 return _font!!
