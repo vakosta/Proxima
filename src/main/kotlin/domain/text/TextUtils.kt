@@ -1,6 +1,6 @@
 package domain.text
 
-internal data class Range(
+data class EditorRange(
     val startLineNo: Int,
     val startColNo: Int,
     val endLineNo: Int,

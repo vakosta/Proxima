@@ -29,8 +29,8 @@ internal data class Piece(
     val chunkDesc: PieceChunkDescriptor,
     val chunkStartPos: PieceChunkLineColOffset,
     val editorEnd: PieceChunkLineColOffset,
-    val lineFeedsCnt: Int,
-    val textLength: Int
+    val lineFeeds: Int,
+    val textLen: Int
 )
 
 //endregion
@@ -121,9 +121,9 @@ internal class PieceTreeNode(
     //endregion
 
     // The length of the text if this node is the root
-    val subtreeTextLen get(): Int = if (this == SENTINEL) 0 else textLenLeft + piece.textLength + right.subtreeTextLen
+    val subtreeTextLen get(): Int = if (this == SENTINEL) 0 else textLenLeft + piece.textLen + right.subtreeTextLen
 
-    val subtreeLineFeedsCount get(): Int = if (this == SENTINEL) 0 else lineFeedsLeft + piece.lineFeedsCnt + right.subtreeLineFeedsCount
+    val subtreeLineFeedsCount get(): Int = if (this == SENTINEL) 0 else lineFeedsLeft + piece.lineFeeds + right.subtreeLineFeedsCount
 
     fun detach() {
         parent = SENTINEL
@@ -150,7 +150,7 @@ internal class PieceTreeSearchCache(
     fun getEntryByOffset(offset: Int): PieceTreeSearchCacheEntry? {
         for (entry in myCache.reversed()) {
             if (entry.nodeStartOffset <= offset
-                && entry.nodeStartOffset + entry.node.piece.textLength >= offset
+                && entry.nodeStartOffset + entry.node.piece.textLen >= offset
             ) {
                 return entry
             }
@@ -162,7 +162,7 @@ internal class PieceTreeSearchCache(
     fun getEntryByLineNumber(lineNumber: Int): PieceTreeSearchCacheEntry? {
         for (entry in myCache.reversed()) {
             if (entry.nodeStartLineNumber != null && entry.nodeStartLineNumber < lineNumber
-                && entry.nodeStartLineNumber + entry.node.piece.lineFeedsCnt >= lineNumber
+                && entry.nodeStartLineNumber + entry.node.piece.lineFeeds >= lineNumber
             ) {
                 return entry
             }
@@ -247,8 +247,51 @@ class PieceTree(
         }
     }
 
-    fun getContentInEditorRange() {
+    fun getContentInEditorRange(range: EditorRange): String {
+        if (range.startLineNo == range.endLineNo && range.startColNo == range.endColNo) {
+            return ""
+        }
 
+        val startLookup = lookupNodeAtEditorPos(range.startLineNo, range.startColNo)
+        val endLookup = lookupNodeAtEditorPos(range.endLineNo, range.endColNo)
+
+        if (startLookup == null || endLookup == null) return ""
+
+        return getContentBetweenNodeLookups(startLookup, endLookup)
+    }
+
+    private fun getContentBetweenNodeLookups(startLookup: NodeLookupResult, endLookupResult: NodeLookupResult): String {
+        if (startLookup.node == endLookupResult.node) {
+            val node = startLookup.node
+            val chunk = lookupChunkByDescriptor(node.piece.chunkDesc)
+            val startOffset = getOffsetInChunk(node.piece.chunkDesc, node.piece.chunkStartPos)
+            return chunk.chunkSubstring(startOffset + startLookup.pieceOffset, startOffset + endLookupResult.pieceOffset)
+        }
+
+        var travNode = startLookup.node
+        val chunk = lookupChunkByDescriptor(travNode.piece.chunkDesc)
+        val startOffset = getOffsetInChunk(travNode.piece.chunkDesc, travNode.piece.chunkStartPos)
+
+        val res = StringBuilder()
+
+        res.append(chunk.chunkSubstring(startOffset + startLookup.pieceOffset, startOffset + travNode.piece.textLen))
+
+        travNode = travNode.next
+        while (travNode != SENTINEL) {
+            val travChunk = lookupChunkByDescriptor(travNode.piece.chunkDesc)
+            val travStartOffset = getOffsetInChunk(travNode.piece.chunkDesc, travNode.piece.chunkStartPos)
+
+            if (travNode == endLookupResult.node) {
+                res.append(travChunk.chunkSubstring(travStartOffset, travStartOffset + endLookupResult.pieceOffset))
+                break
+            } else {
+                res.append(chunk.chunkSubstring(travStartOffset, travNode.piece.textLen))
+            }
+
+            travNode = travNode.next
+        }
+
+        return res.toString()
     }
 
     fun getLinesRawContent(): String {
@@ -261,8 +304,8 @@ class PieceTree(
             val chunk = lookupChunkByDescriptor(travNode.piece.chunkDesc)
             val startOffset = getOffsetInChunk(travNode.piece.chunkDesc, travNode.piece.chunkStartPos)
 
-            resBuilder.append(chunk.chunkSubstring(startOffset, startOffset + travNode.piece.textLength))
-            totalTextLen += travNode.piece.textLength
+            resBuilder.append(chunk.chunkSubstring(startOffset, startOffset + travNode.piece.textLen))
+            totalTextLen += travNode.piece.textLen
 
             travNode = travNode.next
         }
@@ -296,11 +339,11 @@ class PieceTree(
             )
             val chunk = lookupChunkByDescriptor(travNode.piece.chunkDesc)
             val startOffset = getOffsetInChunk(travNode.piece.chunkDesc, travNode.piece.chunkStartPos)
-            if ((cacheEntry.nodeStartLineNumber ?: 0) + travNode.piece.lineFeedsCnt == lineNo) {
+            if ((cacheEntry.nodeStartLineNumber ?: 0) + travNode.piece.lineFeeds == lineNo) {
                 returnBuffer.append(
                     chunk.chunkSubstring(
                         startOffset + prevAccumulatedValue,
-                        startOffset + travNode.piece.textLength
+                        startOffset + travNode.piece.textLen
                     )
                 )
             } else {
@@ -318,7 +361,7 @@ class PieceTree(
             while (travNode != SENTINEL) {
                 if (travNode.left != SENTINEL && travNode.lineFeedsLeft >= travNodeLineNo - 1) {
                     travNode = travNode.left
-                } else if (travNode.lineFeedsLeft + travNode.piece.lineFeedsCnt > travNodeLineNo - 1) {
+                } else if (travNode.lineFeedsLeft + travNode.piece.lineFeeds > travNodeLineNo - 1) {
                     val prevMemorizedOffset = travNode.getOffsetByLineStart(
                         travNodeLineNo - travNode.lineFeedsLeft - 2
                     )
@@ -339,9 +382,9 @@ class PieceTree(
 
                     return chunk.chunkSubstring(
                         startOffset + prevMemorizedOffset,
-                        startOffset + travNode.piece.textLength
+                        startOffset + travNode.piece.textLen
                     )
-                } else if (travNode.lineFeedsLeft + travNode.piece.lineFeedsCnt == travNodeLineNo - 1) {
+                } else if (travNode.lineFeedsLeft + travNode.piece.lineFeeds == travNodeLineNo - 1) {
                     val prevAccumulatedValue =
                         travNode.getOffsetByLineStart(travNodeLineNo - travNode.lineFeedsLeft - 2)
                     val chunk = lookupChunkByDescriptor(travNode.piece.chunkDesc)
@@ -351,13 +394,13 @@ class PieceTree(
                     returnBuffer.append(
                         chunk.chunkSubstring(
                             startOffset + prevAccumulatedValue,
-                            startOffset + travNode.piece.textLength
+                            startOffset + travNode.piece.textLen
                         )
                     )
                     break
                 } else {
-                    travNodeLineNo -= travNode.lineFeedsLeft + travNode.piece.lineFeedsCnt
-                    travNodeStartOffset += travNode.textLenLeft + travNode.piece.textLength
+                    travNodeLineNo -= travNode.lineFeedsLeft + travNode.piece.lineFeeds
+                    travNodeStartOffset += travNode.textLenLeft + travNode.piece.textLen
                     travNode = travNode.right
                 }
             }
@@ -368,7 +411,7 @@ class PieceTree(
         while (travNode != SENTINEL) {
             val chunk = lookupChunkByDescriptor(travNode.piece.chunkDesc)
 
-            if (travNode.piece.lineFeedsCnt > 0) {
+            if (travNode.piece.lineFeeds > 0) {
                 val accumulatedValue = travNode.getOffsetByLineStart(0)
                 val startOffset = getOffsetInChunk(travNode.piece.chunkDesc, travNode.piece.chunkStartPos)
 
@@ -376,7 +419,7 @@ class PieceTree(
                 return returnBuffer.toString()
             } else {
                 val startOffset = getOffsetInChunk(travNode.piece.chunkDesc, travNode.piece.chunkStartPos)
-                returnBuffer.append(chunk.chunkSubstring(startOffset, startOffset + travNode.piece.textLength))
+                returnBuffer.append(chunk.chunkSubstring(startOffset, startOffset + travNode.piece.textLen))
             }
 
             travNode = travNode.next
@@ -407,7 +450,7 @@ class PieceTree(
             val endSplitPos = getEditorCursorPosition(endNode.piece, endLookup.pieceOffset)
 
             if (startLookup.nodeStartOffset == offset) {
-                if (cnt == startNode.piece.textLength) {
+                if (cnt == startNode.piece.textLen) {
                     rbDelete(startNode)
                     recomputeGlobalTextMetadata()
                     return
@@ -418,7 +461,7 @@ class PieceTree(
                 return
             }
 
-            if (startLookup.nodeStartOffset + startNode.piece.textLength == offset + cnt) {
+            if (startLookup.nodeStartOffset + startNode.piece.textLen == offset + cnt) {
                 startNode.deleteTail(startSplitPos)
                 recomputeGlobalTextMetadata()
                 return
@@ -436,13 +479,13 @@ class PieceTree(
         val startSplitPos = getEditorCursorPosition(startNode.piece, startLookup.pieceOffset)
         startNode.deleteTail(startSplitPos)
         mySearchCache.validate(offset)
-        if (startNode.piece.textLength == 0) {
+        if (startNode.piece.textLen == 0) {
             nodesToDelete.add(startNode)
         }
 
         val endSplitPosInBuffer = getEditorCursorPosition(endNode.piece, endLookup.pieceOffset)
         endNode.deleteHead(endSplitPosInBuffer)
-        if (endNode.piece.textLength == 0) {
+        if (endNode.piece.textLen == 0) {
             nodesToDelete.add(endNode)
         }
 
@@ -476,7 +519,7 @@ class PieceTree(
             if (chunkDesc.bufferKind == PieceChunkKind.DIFF
                 && piece.editorEnd.lineNo == myLastChangedLineNo
                 && piece.editorEnd.colNo == myLastChangedColNo
-                && nodeStartOffset + piece.textLength == atOffset
+                && nodeStartOffset + piece.textLen == atOffset
                 && str.length < PREFERRED_PIECE_TREE_CHUNK_SIZE
             ) { // Just append to the buffer
                 node.appendString(str)
@@ -485,7 +528,7 @@ class PieceTree(
 
             if (nodeStartOffset == atOffset) {
                 node.insertStringToLeftOfThis(str)
-            } else if (nodeStartOffset + node.piece.textLength > atOffset) {
+            } else if (nodeStartOffset + node.piece.textLen > atOffset) {
                 // Insert into the middle
                 val newRightPiece = Piece(
                     piece.chunkDesc,
@@ -500,7 +543,7 @@ class PieceTree(
 
                 val newPieces = commitStringToChunkAndMakePieces(str)
                 var tmpNode = node
-                if (newRightPiece.textLength > 0) {
+                if (newRightPiece.textLen > 0) {
                     rbInsertNodeFromPieceRight(tmpNode, newRightPiece)
                 }
                 for (p in newPieces) {
@@ -611,6 +654,74 @@ class PieceTree(
         end: PieceChunkLineColOffset
     ) = end.lineNo - start.lineNo
 
+    private fun lookupNodeAtEditorPos(lineNo: Int, colNo: Int): NodeLookupResult? {
+        var travNode = myRoot
+
+        var nodeStartOffset = 0
+        var travLineNo = lineNo
+        var travColNo = colNo
+
+        while (travNode != SENTINEL) {
+            if (travNode.left != SENTINEL && travNode.lineFeedsLeft >= travLineNo - 1) {
+                travNode = travNode.left
+            } else if (travNode.lineFeedsLeft + travNode.piece.lineFeeds > travLineNo - 1) {
+                val prevLineStartOffset = travNode.getOffsetByLineStart(travLineNo - travNode.lineFeedsLeft - 2)
+                val lineStartOffset = travNode.getOffsetByLineStart(travLineNo - travNode.lineFeedsLeft - 1)
+                nodeStartOffset += travNode.textLenLeft
+
+                return NodeLookupResult(
+                    travNode,
+                    nodeStartOffset,
+                    (prevLineStartOffset + travColNo - 1).coerceAtMost(lineStartOffset)
+                )
+            } else if (travNode.lineFeedsLeft + travNode.piece.lineFeeds == travLineNo - 1) {
+                val prevLineStartOffset = travNode.getOffsetByLineStart(travLineNo - travNode.lineFeedsLeft - 2)
+                if (prevLineStartOffset + travColNo - 1 <= travNode.piece.textLen) {
+                    return NodeLookupResult(
+                        travNode,
+                        nodeStartOffset,
+                        prevLineStartOffset + travColNo - 1
+                    )
+                } else {
+                    travColNo -= travNode.piece.textLen - prevLineStartOffset;
+                    break
+                }
+            } else {
+                travLineNo -= travNode.lineFeedsLeft + travNode.piece.lineFeeds
+                nodeStartOffset += travNode.textLenLeft + travNode.piece.textLen
+                travNode = travNode.right
+            }
+        }
+
+        // Search in order to find the node that contains the colNo
+        travNode = travNode.next
+        while (travNode != SENTINEL) {
+
+            if (travNode.piece.lineFeeds > 0) {
+                val beginningLineStartOffset = travNode.getOffsetByLineStart(0)
+                return NodeLookupResult(
+                    travNode,
+                    travNode.getNodeStartOffset(),
+                    (travColNo - 1).coerceAtMost(beginningLineStartOffset)
+                )
+            } else {
+                if (travNode.piece.textLen >= travColNo - 1) {
+                    return NodeLookupResult(
+                        travNode,
+                        travNode.getNodeStartOffset(),
+                        travColNo - 1
+                    )
+                } else {
+                    travColNo -= travNode.piece.textLen;
+                }
+            }
+
+            travNode = travNode.next
+        }
+
+        return null
+    }
+
     private fun lookupNodeAtOffset(offset: Int): NodeLookupResult? {
         var travRoot = this.myRoot
 
@@ -626,7 +737,7 @@ class PieceTree(
             if (travRoot.textLenLeft > mutOffset) {
                 // We need to go towards the beginning
                 travRoot = travRoot.left
-            } else if (travRoot.textLenLeft + travRoot.piece.textLength >= mutOffset) {
+            } else if (travRoot.textLenLeft + travRoot.piece.textLen >= mutOffset) {
                 // We are in the proper node
                 nodeStartOffset += travRoot.textLenLeft
                 val result = NodeLookupResult(
@@ -642,7 +753,7 @@ class PieceTree(
                 return result
             } else {
                 // Going right is a little painful
-                val fullLeftOffset = travRoot.textLenLeft + travRoot.piece.textLength
+                val fullLeftOffset = travRoot.textLenLeft + travRoot.piece.textLen
                 mutOffset -= fullLeftOffset
                 nodeStartOffset += fullLeftOffset
                 travRoot = travRoot.right
@@ -704,8 +815,8 @@ class PieceTree(
         val originalEndPos = piece.editorEnd
 
         // From [originalStartPos] to [thisNewEnd]
-        val oldLength = piece.textLength
-        val oldLFCnt = piece.lineFeedsCnt
+        val oldLength = piece.textLen
+        val oldLFCnt = piece.lineFeeds
         val newLineFeedCnt = getLineFeedCnt(piece.chunkDesc, piece.chunkStartPos, thisNewEnd)
         val newLength =
             getOffsetInChunk(piece.chunkDesc, thisNewEnd) - getOffsetInChunk(piece.chunkDesc, originalStartPos)
@@ -733,7 +844,7 @@ class PieceTree(
     }
 
     private fun PieceTreeNode.deleteTail(fromEditorPos: PieceChunkLineColOffset) {
-        val originalLFCnt = piece.lineFeedsCnt
+        val originalLFCnt = piece.lineFeeds
         val originalEndOffset = getOffsetInChunk(piece.chunkDesc, piece.editorEnd)
 
         val newEndOffset = getOffsetInChunk(piece.chunkDesc, fromEditorPos)
@@ -741,7 +852,7 @@ class PieceTree(
 
         val lineFeedsDelta = newLineFeedCnt - originalLFCnt
         val textLengthDelta = newEndOffset - originalEndOffset
-        val newLength = piece.textLength + textLengthDelta
+        val newLength = piece.textLen + textLengthDelta
 
         piece = Piece(
             piece.chunkDesc,
@@ -767,14 +878,14 @@ class PieceTree(
     }
 
     private fun PieceTreeNode.deleteHead(fromPos: PieceChunkLineColOffset) {
-        val originalLFCnt = piece.lineFeedsCnt
+        val originalLFCnt = piece.lineFeeds
         val originalStartOffset = getOffsetInChunk(piece.chunkDesc, piece.chunkStartPos)
 
         val newLineFeedCnt = getLineFeedCnt(piece.chunkDesc, fromPos, piece.editorEnd)
         val newStartOffset = getOffsetInChunk(piece.chunkDesc, fromPos)
         val lineFeedsDelta = newLineFeedCnt - originalLFCnt
         val textLenDelta = originalStartOffset - newStartOffset
-        val newLength = piece.textLength + textLenDelta
+        val newLength = piece.textLen + textLenDelta
         piece = Piece(
             piece.chunkDesc,
             fromPos,
@@ -819,9 +930,9 @@ class PieceTree(
             lastDiffChunk.lineStartOffsets.last(),
             lastDiffChunk.chunkLength - lastDiffChunk.lineStartOffsets.last()
         )
-        val newLength = piece.textLength + str.length
+        val newLength = piece.textLen + str.length
 
-        val oldLineFeedsCnt = piece.lineFeedsCnt
+        val oldLineFeedsCnt = piece.lineFeeds
         val newLineFeedsCnt = getLineFeedCnt(piece.chunkDesc, piece.chunkStartPos, newEnd)
         val lineFeedDelta = newLineFeedsCnt - oldLineFeedsCnt
 
@@ -837,6 +948,20 @@ class PieceTree(
         myLastChangedColNo = newEnd.colNo
 
         updateSubtreeTextMetadata(str.length, lineFeedDelta)
+    }
+
+    private fun PieceTreeNode.getNodeStartOffset(): Int {
+        var travNode = this
+        var resOffset = textLenLeft
+
+        while (travNode != myRoot) {
+            if (travNode.isRightChild) {
+                resOffset += travNode.parent.textLenLeft + travNode.parent.piece.textLen
+            }
+            travNode = travNode.parent
+        }
+
+        return resOffset
     }
 
     //endregion
@@ -978,8 +1103,8 @@ class PieceTree(
         val rightChild = at.right
 
         // Fix metadata
-        rightChild.textLenLeft += at.textLenLeft + at.piece.textLength
-        rightChild.lineFeedsLeft += at.lineFeedsLeft + at.piece.lineFeedsCnt
+        rightChild.textLenLeft += at.textLenLeft + at.piece.textLen
+        rightChild.lineFeedsLeft += at.lineFeedsLeft + at.piece.lineFeeds
         at.right = rightChild.left
 
         if (rightChild.left != SENTINEL) {
@@ -1007,8 +1132,8 @@ class PieceTree(
         leftChild.parent = about.parent
 
         // Fix precalculated sizes
-        about.textLenLeft -= leftChild.textLenLeft + leftChild.piece.textLength
-        about.lineFeedsLeft -= leftChild.lineFeedsLeft + leftChild.piece.lineFeedsCnt
+        about.textLenLeft -= leftChild.textLenLeft + leftChild.piece.textLen
+        about.lineFeedsLeft -= leftChild.lineFeedsLeft + leftChild.piece.lineFeeds
 
         if (about.parent == SENTINEL) {
             myRoot = leftChild
@@ -1246,8 +1371,8 @@ class PieceTree(
         var textLength = 0
 
         while (travRoot != SENTINEL) {
-            lineFeedsCnt += travRoot.lineFeedsLeft + travRoot.piece.lineFeedsCnt
-            textLength += travRoot.textLenLeft + travRoot.piece.textLength
+            lineFeedsCnt += travRoot.lineFeedsLeft + travRoot.piece.lineFeeds
+            textLength += travRoot.textLenLeft + travRoot.piece.textLen
             travRoot = travRoot.right
         }
 
