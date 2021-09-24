@@ -1,36 +1,96 @@
 package presentation.windows
 
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
-import androidx.compose.material.Button
-import androidx.compose.material.MaterialTheme
-import androidx.compose.material.Text
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.SpringSpec
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.Icon
+import androidx.compose.material.LocalContentColor
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Window
+import presentation.states.MainWindowState
+import presentation.states.PanelState
+import presentation.utils.VerticalSplittable
+import presentation.views.CodeView
+import presentation.views.FileTreeView
 
 @Composable
-fun MainWindow() {
-    var text by remember { mutableStateOf("Hello, World!") }
+fun MainWindow(state: MainWindowState) = Window(
+    state = state,
+    onCloseRequest = {},
+    onKeyEvent = { state.onKeyEvent(it) }
+) {
+    val animatedSize = if (state.panelState.splitter.isResizing) {
+        state.panelState.size
+    } else {
+        animateDpAsState(
+            state.panelState.size,
+            SpringSpec(stiffness = Spring.StiffnessLow)
+        ).value
+    }
 
-    MaterialTheme {
-        Column {
-            Button(onClick = {
-                text = "Hello, Desktop!"
-            }) {
-                Text(text)
-            }
-            Spacer(modifier = Modifier.height(10.dp))
-            Button(onClick = {
-                text = "Hello, Desktop!"
-            }) {
-                Text(text)
-            }
+    VerticalSplittable(
+        Modifier.fillMaxSize(),
+        state.panelState.splitter,
+        onResize = {
+            state.panelState.expandedSize =
+                (state.panelState.expandedSize + it).coerceAtLeast(state.panelState.expandedSizeMin)
         }
+    ) {
+        ResizablePanel(Modifier.width(animatedSize).fillMaxHeight(), state.panelState) {
+            FileTreeView(state.fileTreeState)
+        }
+        CodeView(
+            code = state.fileContentRendered,
+            onGloballyPositioned = {
+                state.updateRenderedContent(it.size.width, it.size.height)
+            }
+        )
+    }
+}
+
+@Composable
+private fun ResizablePanel(
+    modifier: Modifier,
+    state: PanelState,
+    content: @Composable () -> Unit,
+) {
+    val alpha by animateFloatAsState(
+        if (state.isExpanded) 1f else 0f,
+        SpringSpec(stiffness = Spring.StiffnessLow)
+    )
+
+    Box(modifier) {
+        Box(Modifier.fillMaxSize().graphicsLayer(alpha = alpha)) {
+            content()
+        }
+
+        Icon(
+            if (state.isExpanded) Icons.Default.ArrowBack else Icons.Default.ArrowForward,
+            contentDescription = if (state.isExpanded) "Collapse" else "Expand",
+            tint = LocalContentColor.current,
+            modifier = Modifier
+                .padding(top = 4.dp)
+                .width(24.dp)
+                .clickable {
+                    state.isExpanded = !state.isExpanded
+                }
+                .padding(4.dp)
+                .align(Alignment.TopEnd)
+        )
     }
 }

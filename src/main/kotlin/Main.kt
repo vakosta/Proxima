@@ -1,8 +1,8 @@
-import androidx.compose.desktop.Window
+import androidx.compose.ui.window.application
+import presentation.states.MainWindowState
 import presentation.windows.MainWindow
 
-fun main() = Window(
-    title = "HSEditor",
-) {
-    MainWindow()
+fun main() = application {
+    val state = MainWindowState()
+    MainWindow(state)
 }
