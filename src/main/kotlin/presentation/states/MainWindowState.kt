@@ -11,6 +11,7 @@ import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.WindowSize
 import androidx.compose.ui.window.WindowState
 import domain.skija.SkijaBuilder
+import domain.text.PieceTreeBuilder
 import presentation.model.File
 import presentation.model.getFile
 import presentation.utils.isRelevant
@@ -26,13 +27,13 @@ class MainWindowState(
 
     val fileTreeState = FileTree(File("Kek", true, listOf(getFile(), getFile(), getFile()), true))
 
-    private var fileContent = StringBuilder("")
+    private var fileContent = PieceTreeBuilder().build() // Build an empty piece tree, file loading will return a non-empty one
     private var carriagePosition = 0
 
     val panelState by mutableStateOf(PanelState())
     var fileContentRendered by mutableStateOf(
         SkijaBuilder(
-            fileContent.toString(),
+            fileContent.getLinesRawContent(), // Start at EditorRange() and end at EditorRange(), will be faster
             carriagePosition,
             300,
             300
@@ -48,7 +49,8 @@ class MainWindowState(
     }
 
     fun updateRenderedContent(width: Int, height: Int) {
-        fileContentRendered = SkijaBuilder(fileContent.toString(), carriagePosition, width, height).buildView()
+        // Start at EditorRange() and end at EditorRange(), will be faster
+        fileContentRendered = SkijaBuilder(fileContent.getLinesRawContent(), carriagePosition, width, height).buildView()
     }
 
     private fun handleKeyEvent(keyEvent: KeyEvent) {
@@ -69,16 +71,16 @@ class MainWindowState(
     }
 
     private fun onPressedRightArrow() {
-        carriagePosition = min(carriagePosition + 1, fileContent.length)
+        carriagePosition = min(carriagePosition + 1, fileContent.textLength)
     }
 
     private fun onPressedBackspace() {
-        fileContent = fileContent.deleteCharAt(carriagePosition - 1)
-        carriagePosition--
+        fileContent.deleteAfter(carriagePosition - 1)
+        onPressedLeftArrow() // Step to the left
     }
 
     private fun onTypedChar(char: Char) {
-        fileContent = fileContent.insert(carriagePosition, char)
+        fileContent.insert(char.toString(), carriagePosition, true)
         carriagePosition++
     }
 }

@@ -31,7 +31,7 @@ class PieceTreeBuilder {
         myChunks.add(FileChunk(debommedStr, debommedStr.getLineStartOffsetsList()))
     }
 
-    fun buildPieceTree(): PieceTree {
+    fun build(): PieceTree {
         // Normalize eof to /n
         for (i in myChunks.indices) {
             val normalizedStr = myChunks[i].chunk.replace(Regex("\r\n"), "\n")

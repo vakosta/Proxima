@@ -4,11 +4,14 @@ import domain.text.file.DiffChunk
 import domain.text.file.FileChunk
 import domain.text.file.getLineStartOffsetsList
 
+// TODO @thisisvolatile maybe do a refactoring of the internal API?
+// TODO Fix max modifiable chars?
+
 //region Misc. declarations
 
 internal const val PREFERRED_PIECE_TREE_CHUNK_SIZE = 65535
 
-internal enum class PieceChunkKind { FILE, DIFF }
+internal enum class ChunkKind { FILE, DIFF }
 
 /**
  * Used in [PieceTreeSearchCache] as a return type.
@@ -18,17 +21,17 @@ internal data class NodeLookupResult(val node: PieceTreeNode, val nodeStartOffse
 /**
  * Describes a text chunk inside the [PieceTree].
  */
-internal data class PieceChunkDescriptor(val bufferKind: PieceChunkKind, val bufferIndex: Int)
+internal data class ChunkDescriptor(val bufferKind: ChunkKind, val bufferIndex: Int)
 
 /**
  * Is used to facilitate faster text lookup inside a chunk.
  */
-internal data class PieceChunkLineColOffset(val lineNo: Int, val colNo: Int)
+internal data class ChunkLFOffset(val lineFeedsNo: Int, val charsAfterLastLF: Int)
 
 internal data class Piece(
-    val chunkDesc: PieceChunkDescriptor,
-    val chunkStartPos: PieceChunkLineColOffset,
-    val editorEnd: PieceChunkLineColOffset,
+    val chunkDesc: ChunkDescriptor,
+    val chunkStartPos: ChunkLFOffset,
+    val chunkEndPos: ChunkLFOffset,
     val lineFeeds: Int,
     val textLen: Int
 )
@@ -42,9 +45,9 @@ internal enum class NodeColor { Black, Red }
 internal val SENTINEL = PieceTreeNode(
     NodeColor.Black,
     Piece(
-        PieceChunkDescriptor(PieceChunkKind.FILE, -1),
-        PieceChunkLineColOffset(-1, -1),
-        PieceChunkLineColOffset(-1, -1),
+        ChunkDescriptor(ChunkKind.FILE, -1),
+        ChunkLFOffset(-1, -1),
+        ChunkLFOffset(-1, -1),
         -1,
         -1
     )
@@ -209,6 +212,7 @@ class PieceTree(
     val lineCount get() = myLineFeedsCnt
 
     private var myTextLength: Int = 0
+    val textLength get() = myTextLength
 
     private var myLastChangedLineNo = 0
     private var myLastChangedColNo = 0
@@ -233,9 +237,9 @@ class PieceTree(
                 }
 
                 val piece = Piece(
-                    PieceChunkDescriptor(PieceChunkKind.FILE, i),
-                    PieceChunkLineColOffset(0, 0),
-                    PieceChunkLineColOffset(
+                    ChunkDescriptor(ChunkKind.FILE, i),
+                    ChunkLFOffset(0, 0),
+                    ChunkLFOffset(
                         myFileChunks[i].lineStartOffsets.lastIndex,
                         myFileChunks[i].chunk.length - myFileChunks[i].lineStartOffsets.last()
                     ),
@@ -428,18 +432,35 @@ class PieceTree(
         return returnBuffer.toString()
     }
 
-    fun delete(offset: Int, cnt: Int) {
+    /**
+     * Deletes [cnt] chars BEFORE [beforeOffset].
+     *
+     * If [cnt] is not provided, deletes a singe character.
+     */
+    fun deleteBefore(beforeOffset: Int, cnt: Int = 1) {
+        require(beforeOffset - cnt > 0) {
+            "Can't delete cnt chars before the provided offset, because there aren't that many!"
+        }
+
+        deleteAfter(beforeOffset - cnt, cnt)
+    }
+
+    /**
+     * Deletes [cnt] chars AFTER [afterOffset].
+     *
+     * If [cnt] is not provided, deletes a singe character.
+     */
+    fun deleteAfter(afterOffset: Int, cnt: Int = 1) {
         myLastVisitedLineNo = 0
         myLastVisitedLineValue = ""
 
         if (cnt <= 0 || myRoot == SENTINEL) return
 
-        val startLookup = lookupNodeAtOffset(offset)
-        val endLookup = lookupNodeAtOffset(offset)
+        val startLookup = lookupNodeAtOffset(afterOffset)
+        val endLookup = lookupNodeAtOffset((afterOffset + cnt).coerceAtLeast(0))
 
-        if (startLookup == null || endLookup == null) {
-            // Logger.WARN
-            return
+        require(startLookup != null && endLookup != null) {
+            "[DELETE]: Some lookup was not possible due to invalid offsets!"
         }
 
         val startNode = startLookup.node
@@ -449,19 +470,19 @@ class PieceTree(
             val startSplitPos = getEditorCursorPosition(startNode.piece, startLookup.pieceOffset)
             val endSplitPos = getEditorCursorPosition(endNode.piece, endLookup.pieceOffset)
 
-            if (startLookup.nodeStartOffset == offset) {
+            if (startLookup.nodeStartOffset == afterOffset) {
                 if (cnt == startNode.piece.textLen) {
                     rbDelete(startNode)
                     recomputeGlobalTextMetadata()
                     return
                 }
                 startNode.deleteHead(endSplitPos)
-                mySearchCache.validate(offset)
+                mySearchCache.validate(afterOffset)
                 recomputeGlobalTextMetadata()
                 return
             }
 
-            if (startLookup.nodeStartOffset + startNode.piece.textLen == offset + cnt) {
+            if (startLookup.nodeStartOffset + startNode.piece.textLen == afterOffset + cnt) {
                 startNode.deleteTail(startSplitPos)
                 recomputeGlobalTextMetadata()
                 return
@@ -478,7 +499,7 @@ class PieceTree(
 
         val startSplitPos = getEditorCursorPosition(startNode.piece, startLookup.pieceOffset)
         startNode.deleteTail(startSplitPos)
-        mySearchCache.validate(offset)
+        mySearchCache.validate(afterOffset)
         if (startNode.piece.textLen == 0) {
             nodesToDelete.add(startNode)
         }
@@ -500,7 +521,12 @@ class PieceTree(
         recomputeGlobalTextMetadata()
     }
 
-    fun insert(str: String, atOffset: Int, isEolNormalized: Boolean) {
+    /**
+     * Inserts the [str] starting at offset [atOffset].
+     *
+     * [isEolNormalized] is useless for now, please have it as true.
+     */
+    fun insert(str: String, atOffset: Int, isEolNormalized: Boolean = true) {
         myIsEolNormalized = myIsEolNormalized && isEolNormalized
 
         myLastVisitedLineNo = 0
@@ -508,22 +534,25 @@ class PieceTree(
 
         if (myRoot != SENTINEL) {
             val lookupRes = lookupNodeAtOffset(atOffset)
-                ?: // LOGGER.error()
-                return
+
+            require(lookupRes != null) {
+                "[INSERT]: Lookup is null due to an invalid offset!"
+            }
 
             val (node, nodeStartOffset, pieceOffset) = lookupRes
             val piece = node.piece
             val chunkDesc = piece.chunkDesc
             val insertPosInEditor = getEditorCursorPosition(piece, pieceOffset)
 
-            if (chunkDesc.bufferKind == PieceChunkKind.DIFF
-                && piece.editorEnd.lineNo == myLastChangedLineNo
-                && piece.editorEnd.colNo == myLastChangedColNo
+            if (chunkDesc.bufferKind == ChunkKind.DIFF
+                && piece.chunkEndPos.lineFeedsNo == myLastChangedLineNo
+                && piece.chunkEndPos.charsAfterLastLF == myLastChangedColNo
                 && nodeStartOffset + piece.textLen == atOffset
                 && str.length < PREFERRED_PIECE_TREE_CHUNK_SIZE
             ) { // Just append to the buffer
                 node.appendString(str)
                 recomputeGlobalTextMetadata()
+                return
             }
 
             if (nodeStartOffset == atOffset) {
@@ -533,9 +562,9 @@ class PieceTree(
                 val newRightPiece = Piece(
                     piece.chunkDesc,
                     insertPosInEditor,
-                    piece.editorEnd,
-                    getLineFeedCnt(piece.chunkDesc, insertPosInEditor, piece.editorEnd),
-                    getOffsetInChunk(piece.chunkDesc, piece.editorEnd)
+                    piece.chunkEndPos,
+                    getLineFeedCnt(piece.chunkDesc, insertPosInEditor, piece.chunkEndPos),
+                    getOffsetInChunk(piece.chunkDesc, piece.chunkEndPos)
                             - getOffsetInChunk(piece.chunkDesc, insertPosInEditor)
                 )
 
@@ -565,9 +594,9 @@ class PieceTree(
         recomputeGlobalTextMetadata()
     }
 
-    private fun getOffsetInChunk(bufferDescriptor: PieceChunkDescriptor, editorPos: PieceChunkLineColOffset): Int {
+    private fun getOffsetInChunk(bufferDescriptor: ChunkDescriptor, editorPos: ChunkLFOffset): Int {
         val lineStartOffsets = lookupChunkByDescriptor(bufferDescriptor).lineStartOffsets
-        return lineStartOffsets[editorPos.lineNo] + editorPos.colNo
+        return lineStartOffsets[editorPos.lineFeedsNo] + editorPos.charsAfterLastLF
     }
 
     /**
@@ -584,9 +613,9 @@ class PieceTree(
                 val lineStartOffsets = splitText.getLineStartOffsetsList()
                 newPieces.add(
                     Piece(
-                        PieceChunkDescriptor(PieceChunkKind.FILE, myFileChunks.size),
-                        PieceChunkLineColOffset(0, 0),
-                        PieceChunkLineColOffset(lineStartOffsets.lastIndex, splitText.length - lineStartOffsets.last()),
+                        ChunkDescriptor(ChunkKind.FILE, myFileChunks.size),
+                        ChunkLFOffset(0, 0),
+                        ChunkLFOffset(lineStartOffsets.lastIndex, splitText.length - lineStartOffsets.last()),
                         lineStartOffsets.lastIndex,
                         splitText.length
                     )
@@ -598,9 +627,9 @@ class PieceTree(
             val lineStartOffsets = text.getLineStartOffsetsList()
             newPieces.add(
                 Piece(
-                    PieceChunkDescriptor(PieceChunkKind.FILE, myFileChunks.size),
-                    PieceChunkLineColOffset(0, 0),
-                    PieceChunkLineColOffset(lineStartOffsets.lastIndex, text.length - lineStartOffsets.last()),
+                    ChunkDescriptor(ChunkKind.FILE, myFileChunks.size),
+                    ChunkLFOffset(0, 0),
+                    ChunkLFOffset(lineStartOffsets.lastIndex, text.length - lineStartOffsets.last()),
                     lineStartOffsets.lastIndex,
                     text.length
                 )
@@ -617,19 +646,21 @@ class PieceTree(
         val lastDiffChunk = myDiffChunks.last()
         val startOffset = lastDiffChunk.chunkLength
         val lineStartOffsets = str.getLineStartOffsetsList()
-        for (i in lineStartOffsets.indices) {
-            lineStartOffsets[i] += startOffset
+        if (lineStartOffsets.size > 1) {
+            for (i in 1..lineStartOffsets.lastIndex) {
+                lineStartOffsets[i] += startOffset
+            }
         }
 
-        lastDiffChunk.lineStartOffsets = lastDiffChunk.lineStartOffsets + lineStartOffsets
+        lastDiffChunk.lineStartOffsets = lastDiffChunk.lineStartOffsets.union(lineStartOffsets).toList()
         lastDiffChunk.commit(str)
 
         val endOffset = lastDiffChunk.chunkLength
-        val endLine = lastDiffChunk.lineStartOffsets.lastIndex
+        val endLine = lastDiffChunk.lineStartOffsets.lastIndex.coerceAtLeast(0)
         val endCol = endOffset - lastDiffChunk.lineStartOffsets[endLine]
-        val endPos = PieceChunkLineColOffset(endLine, endCol)
-        val chunkDesc = PieceChunkDescriptor(PieceChunkKind.DIFF, 0)
-        val startPos = PieceChunkLineColOffset(myLastChangedLineNo, myLastChangedColNo)
+        val endPos = ChunkLFOffset(endLine, endCol)
+        val chunkDesc = ChunkDescriptor(ChunkKind.DIFF, 0)
+        val startPos = ChunkLFOffset(myLastChangedLineNo, myLastChangedColNo)
         val newPiece = Piece(
             chunkDesc,
             startPos,
@@ -638,8 +669,8 @@ class PieceTree(
             endOffset - startOffset
         )
 
-        myLastChangedLineNo = endPos.lineNo
-        myLastChangedColNo = endPos.colNo
+        myLastChangedLineNo = endPos.lineFeedsNo
+        myLastChangedColNo = endPos.charsAfterLastLF
 
         return newPiece
     }
@@ -649,10 +680,10 @@ class PieceTree(
      * This function will need an overhaul to support \r\n line endings.
      */
     private fun getLineFeedCnt(
-        chunkDescriptor: PieceChunkDescriptor,
-        start: PieceChunkLineColOffset,
-        end: PieceChunkLineColOffset
-    ) = end.lineNo - start.lineNo
+        chunkDescriptor: ChunkDescriptor,
+        start: ChunkLFOffset,
+        end: ChunkLFOffset
+    ) = end.lineFeedsNo - start.lineFeedsNo
 
     private fun lookupNodeAtEditorPos(lineNo: Int, colNo: Int): NodeLookupResult? {
         var travNode = myRoot
@@ -742,8 +773,8 @@ class PieceTree(
                 nodeStartOffset += travRoot.textLenLeft
                 val result = NodeLookupResult(
                     travRoot,
+                    nodeStartOffset,
                     mutOffset - travRoot.textLenLeft,
-                    nodeStartOffset
                 )
 
                 mySearchCache.addEntry(result.let {
@@ -763,20 +794,20 @@ class PieceTree(
         return null
     }
 
-    private fun lookupChunkByDescriptor(desc: PieceChunkDescriptor) = when (desc.bufferKind) {
-        PieceChunkKind.FILE -> myFileChunks[desc.bufferIndex]
-        PieceChunkKind.DIFF -> myDiffChunks[desc.bufferIndex]
+    private fun lookupChunkByDescriptor(desc: ChunkDescriptor) = when (desc.bufferKind) {
+        ChunkKind.FILE -> myFileChunks[desc.bufferIndex]
+        ChunkKind.DIFF -> myDiffChunks[desc.bufferIndex]
     }
 
-    private fun getEditorCursorPosition(piece: Piece, pieceOffset: Int): PieceChunkLineColOffset {
+    private fun getEditorCursorPosition(piece: Piece, pieceOffset: Int): ChunkLFOffset {
         val lineStartOffsets = lookupChunkByDescriptor(piece.chunkDesc).lineStartOffsets
-        val startOffset = lineStartOffsets[piece.chunkStartPos.lineNo] + piece.chunkStartPos.colNo
+        val startOffset = lineStartOffsets[piece.chunkStartPos.lineFeedsNo] + piece.chunkStartPos.charsAfterLastLF
 
         val globalOffset = startOffset + pieceOffset
 
         // Binary search between start offset and end offset
-        var lowLineNo = piece.chunkStartPos.lineNo
-        var highLineNo = piece.chunkStartPos.lineNo
+        var lowLineNo = piece.chunkStartPos.lineFeedsNo
+        var highLineNo = piece.chunkEndPos.lineFeedsNo
 
         var midLineNo = 0
         var midOffsetStop: Int
@@ -784,10 +815,10 @@ class PieceTree(
 
         while (lowLineNo <= highLineNo) {
             midLineNo = lowLineNo + ((highLineNo - lowLineNo) / 2)
+            midOffsetStart = lineStartOffsets[midLineNo]
 
             if (midLineNo == highLineNo) break
 
-            midOffsetStart = lineStartOffsets[midLineNo]
             midOffsetStop = lineStartOffsets[midLineNo + 1]
 
             if (globalOffset < midOffsetStart) {
@@ -799,7 +830,7 @@ class PieceTree(
             }
         }
 
-        return PieceChunkLineColOffset(midLineNo, globalOffset - midOffsetStart)
+        return ChunkLFOffset(midLineNo, globalOffset - midOffsetStart)
     }
 
     //region CRLF handling (that ensures that a \r\n sequence is never split)
@@ -810,9 +841,9 @@ class PieceTree(
 
     //region PieceTree-specific node methods
 
-    private fun PieceTreeNode.splitToRight(thisNewEnd: PieceChunkLineColOffset, otherNewStart: PieceChunkLineColOffset) {
+    private fun PieceTreeNode.splitToRight(thisNewEnd: ChunkLFOffset, otherNewStart: ChunkLFOffset) {
         val originalStartPos = piece.chunkStartPos
-        val originalEndPos = piece.editorEnd
+        val originalEndPos = piece.chunkEndPos
 
         // From [originalStartPos] to [thisNewEnd]
         val oldLength = piece.textLen
@@ -843,9 +874,9 @@ class PieceTree(
         rbInsertNodeFromPieceRight(this, newPiece)
     }
 
-    private fun PieceTreeNode.deleteTail(fromEditorPos: PieceChunkLineColOffset) {
+    private fun PieceTreeNode.deleteTail(fromEditorPos: ChunkLFOffset) {
         val originalLFCnt = piece.lineFeeds
-        val originalEndOffset = getOffsetInChunk(piece.chunkDesc, piece.editorEnd)
+        val originalEndOffset = getOffsetInChunk(piece.chunkDesc, piece.chunkEndPos)
 
         val newEndOffset = getOffsetInChunk(piece.chunkDesc, fromEditorPos)
         val newLineFeedCnt = getLineFeedCnt(piece.chunkDesc, piece.chunkStartPos, fromEditorPos)
@@ -868,20 +899,20 @@ class PieceTree(
     private fun PieceTreeNode.getOffsetByLineStart(lineStartOffset: Int): Int {
         if (lineStartOffset < 0) return 0
         val lineStarts = lookupChunkByDescriptor(piece.chunkDesc).lineStartOffsets
-        val expectedLineStartIndex = piece.chunkStartPos.lineNo + lineStartOffset + 1
-        return if (expectedLineStartIndex > piece.editorEnd.lineNo) {
-            lineStarts[piece.editorEnd.lineNo] + piece.editorEnd.colNo -
-                    (lineStarts[piece.chunkStartPos.lineNo] + piece.chunkStartPos.colNo) //TODO make it prettier
+        val expectedLineStartIndex = piece.chunkStartPos.lineFeedsNo + lineStartOffset + 1
+        return if (expectedLineStartIndex > piece.chunkEndPos.lineFeedsNo) {
+            lineStarts[piece.chunkEndPos.lineFeedsNo] + piece.chunkEndPos.charsAfterLastLF -
+                    (lineStarts[piece.chunkStartPos.lineFeedsNo] + piece.chunkStartPos.charsAfterLastLF) //TODO make it prettier
         } else {
-            lineStarts[expectedLineStartIndex] - (lineStarts[piece.chunkStartPos.lineNo] + piece.chunkStartPos.colNo)
+            lineStarts[expectedLineStartIndex] - (lineStarts[piece.chunkStartPos.lineFeedsNo] + piece.chunkStartPos.charsAfterLastLF)
         }
     }
 
-    private fun PieceTreeNode.deleteHead(fromPos: PieceChunkLineColOffset) {
+    private fun PieceTreeNode.deleteHead(fromPos: ChunkLFOffset) {
         val originalLFCnt = piece.lineFeeds
         val originalStartOffset = getOffsetInChunk(piece.chunkDesc, piece.chunkStartPos)
 
-        val newLineFeedCnt = getLineFeedCnt(piece.chunkDesc, fromPos, piece.editorEnd)
+        val newLineFeedCnt = getLineFeedCnt(piece.chunkDesc, fromPos, piece.chunkEndPos)
         val newStartOffset = getOffsetInChunk(piece.chunkDesc, fromPos)
         val lineFeedsDelta = newLineFeedCnt - originalLFCnt
         val textLenDelta = originalStartOffset - newStartOffset
@@ -889,7 +920,7 @@ class PieceTree(
         piece = Piece(
             piece.chunkDesc,
             fromPos,
-            piece.editorEnd,
+            piece.chunkEndPos,
             newLineFeedCnt,
             newLength
         )
@@ -920,14 +951,16 @@ class PieceTree(
         lastDiffChunk.commit(str)
 
         val lineStartOffsets = str.getLineStartOffsetsList()
-        for (i in lineStartOffsets.indices) {
-            lineStartOffsets[i] += startOffset
+        if (lineStartOffsets.size > 1) {
+            for (i in 1..lineStartOffsets.lastIndex) {
+                lineStartOffsets[i] += startOffset
+            }
         }
 
 
-        lastDiffChunk.lineStartOffsets = lastDiffChunk.lineStartOffsets + lineStartOffsets
-        val newEnd = PieceChunkLineColOffset(
-            lastDiffChunk.lineStartOffsets.last(),
+        lastDiffChunk.lineStartOffsets = lastDiffChunk.lineStartOffsets.union(lineStartOffsets).toList()
+        val newEnd = ChunkLFOffset(
+            lastDiffChunk.lineStartOffsets.lastIndex,
             lastDiffChunk.chunkLength - lastDiffChunk.lineStartOffsets.last()
         )
         val newLength = piece.textLen + str.length
@@ -944,8 +977,8 @@ class PieceTree(
             newLength
         )
 
-        myLastChangedLineNo = newEnd.lineNo
-        myLastChangedColNo = newEnd.colNo
+        myLastChangedLineNo = newEnd.lineFeedsNo
+        myLastChangedColNo = newEnd.charsAfterLastLF
 
         updateSubtreeTextMetadata(str.length, lineFeedDelta)
     }
@@ -1350,9 +1383,6 @@ class PieceTree(
 
         travNode.textLenLeft += textLengthDelta
         travNode.lineFeedsLeft += lineFeedsCntDelta
-
-        // Warn if deltas are 0
-        // TODO Logger.warn
 
         // Upwards, towards the root
         while (travNode != myRoot) {

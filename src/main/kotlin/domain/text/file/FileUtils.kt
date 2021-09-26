@@ -10,6 +10,8 @@ interface CharacterChunk {
     val chunk: String
     var lineStartOffsets: List<Int>
 
+    val chunkLength: Int
+
     fun chunkSubstring(start: Int, end: Int): String
 }
 
@@ -20,6 +22,8 @@ data class FileChunk(
     override val chunk: String,
     override var lineStartOffsets: List<Int>
 ) : CharacterChunk {
+    override val chunkLength get(): Int = chunk.length
+
     override fun chunkSubstring(start: Int, end: Int) = chunk.substring(start, end)
 }
 
@@ -35,13 +39,15 @@ data class DiffChunk(
     override var lineStartOffsets: List<Int> = myLineStartOffsets
     override val chunk get() = diffBuilder.toString()
 
-    val chunkLength get() = diffBuilder.length
+    override val chunkLength get() = diffBuilder.length
 
     fun commit(str: String) {
         diffBuilder.append(str)
     }
 
-    override fun chunkSubstring(start: Int, end: Int) = diffBuilder.substring(start, end) ?: ""
+    override fun chunkSubstring(start: Int, end: Int): String {
+        return diffBuilder.substring(start, end)
+    }
 }
 
 fun fetchPieceTreeFileChunks(fileName: String): List<FileChunk> {
@@ -66,12 +72,15 @@ fun fetchPieceTreeFileChunks(fileName: String): List<FileChunk> {
  */
 fun String.getLineStartOffsetsList(): MutableList<Int> {
     val result = mutableListOf(0)
-    // Because var on loop parameters isn't allowed.
-    // Kotlin is nice, but sometimes it's a monstrosity.
+
+    return fillLineStarts(this, result)
+}
+
+private fun fillLineStarts(str: String, result: MutableList<Int>): MutableList<Int> {
     var i = 0
-    while (i < this.length) {
-        when (this[i]) {
-            '\r' -> if (i + 1 < this.length && this[i + 1] == '\n') {
+    while (i < str.length) {
+        when (str[i]) {
+            '\r' -> if (i + 1 < str.length && str[i + 1] == '\n') {
                 // got \r\n
                 result.add(i + 2)
                 ++i

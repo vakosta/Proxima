@@ -27,11 +27,12 @@ import presentation.states.PanelState
 import presentation.utils.VerticalSplittable
 import presentation.views.CodeView
 import presentation.views.FileTreeView
+import kotlin.system.exitProcess
 
 @Composable
 fun MainWindow(state: MainWindowState) = Window(
     state = state,
-    onCloseRequest = {},
+    onCloseRequest = { exitProcess(0) /* TODO some other handling obv required */ },
     onKeyEvent = { state.onKeyEvent(it) }
 ) {
     val animatedSize = if (state.panelState.splitter.isResizing) {
