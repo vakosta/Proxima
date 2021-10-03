@@ -21,6 +21,8 @@ dependencies {
 
     implementation(compose.desktop.currentOs)
     implementation(kotlin("stdlib-jdk8"))
+
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.5.2")
 }
 
 tasks.test {
