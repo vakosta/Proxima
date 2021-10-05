@@ -73,7 +73,7 @@ fun MainWindow(state: MainWindowState) = Window(
                 items(state.editorStates) { editorState ->
                     Tab(
                         state = editorState,
-                        onClick = { state.setActiveEditor(editorState) },
+                        onClick = { state.activeEditorState = editorState },
                         onClose = { state.closeEditor(editorState) },
                     )
                 }

@@ -2,19 +2,18 @@ package ru.hse.hseditor.presentation.states
 
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.utf16CodePoint
-import ru.hse.hseditor.domain.text.PieceTree
-import ru.hse.hseditor.domain.text.PieceTreeBuilder
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
+import org.koin.core.parameter.parametersOf
+import ru.hse.hseditor.domain.highlights.TextState
 import ru.hse.hseditor.presentation.utils.isRelevant
-import kotlin.math.max
-import kotlin.math.min
 
 class EditorState(
     var fileName: String,
     var isActive: Boolean = false,
-    var content: PieceTree = PieceTreeBuilder().build(),
-) {
+) : KoinComponent {
 
-    var carriagePosition = 0
+    val textState: TextState by inject { parametersOf("", TextState.Language.Kotlin) }
 
     fun onKeyEvent(keyEvent: KeyEvent): Boolean {
         if (keyEvent.isRelevant()) {
@@ -26,31 +25,13 @@ class EditorState(
     private fun handleKeyEvent(keyEvent: KeyEvent) {
         when (keyEvent.nativeKeyEvent.keyCode) {
             8 ->
-                onPressedBackspace()
+                textState.onPressedBackspace()
             37 ->
-                onPressedLeftArrow()
+                textState.onPressedLeftArrow()
             39 ->
-                onPressedRightArrow()
+                textState.onPressedRightArrow()
             else ->
-                onTypedChar(keyEvent.utf16CodePoint.toChar())
+                textState.onTypedChar(keyEvent.utf16CodePoint.toChar())
         }
-    }
-
-    private fun onPressedLeftArrow() {
-        carriagePosition = max(carriagePosition - 1, 0)
-    }
-
-    private fun onPressedRightArrow() {
-        carriagePosition = min(carriagePosition + 1, content.textLength)
-    }
-
-    private fun onPressedBackspace() {
-        content.deleteAfter(carriagePosition - 1)
-        onPressedLeftArrow() // Step to the left
-    }
-
-    private fun onTypedChar(char: Char) {
-        content.insert(char.toString(), carriagePosition, true)
-        carriagePosition++
     }
 }

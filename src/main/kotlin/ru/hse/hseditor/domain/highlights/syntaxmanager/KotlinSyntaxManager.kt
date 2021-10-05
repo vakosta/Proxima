@@ -1,4 +1,4 @@
-package ru.hse.hseditor.domain.lexer
+package ru.hse.hseditor.domain.highlights.syntaxmanager
 
 import org.antlr.v4.runtime.CharStreams
 import org.antlr.v4.runtime.CommonTokenStream
@@ -9,21 +9,25 @@ import org.antlr.v4.runtime.tree.TerminalNode
 import ru.hse.hseditor.antlr.KotlinLexer
 import ru.hse.hseditor.antlr.KotlinParser
 import ru.hse.hseditor.antlr.KotlinParserListener
+import ru.hse.hseditor.data.HighlightInterval
+import ru.hse.hseditor.domain.highlights.SyntaxErrorListener
 
-class KotlinLexerService(
-    private val text: String,
-) : LexerService {
+class KotlinSyntaxManager(
+    val addInterval: (interval: HighlightInterval) -> Unit,
+) : SyntaxManager() {
 
-    override val allTokens: List<Token>
-        get() = getTokens()
-
-    private fun getTokens(): List<Token> {
+    override fun getTokens(text: String): List<Token> {
         val lexer = KotlinLexer(CharStreams.fromString(text))
         val parser = KotlinParser(CommonTokenStream(lexer))
         parser.addParseListener(parserListener)
+        parser.addErrorListener(SyntaxErrorListener(this@KotlinSyntaxManager::onError))
         parser.statements()
         lexer.reset()
         return lexer.allTokens
+    }
+
+    private fun onError(line: Int, charPositionInLine: Int) {
+        // addInterval(HighlightInterval())
     }
 
     companion object {

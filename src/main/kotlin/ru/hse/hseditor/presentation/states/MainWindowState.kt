@@ -25,7 +25,7 @@ class MainWindowState(
     override var isMinimized: Boolean = false,
     override var position: WindowPosition = WindowPosition.PlatformDefault,
     override var size: WindowSize = WindowSize(800.dp, 600.dp),
-) : WindowState, KoinComponent {
+) : KoinComponent, WindowState {
 
     private val fileSystemManager: FileSystemManager by inject()
 
@@ -36,35 +36,38 @@ class MainWindowState(
     val panelState: PanelState by mutableStateOf(PanelState())
     val fileTreeState: FileTree = FileTree(fileSystemManager.getBaseDirectory(), this::openEditor)
     val editorStates: MutableList<EditorState> = mutableStateListOf()
+    var activeEditorState: EditorState?
+        get() = editorStates.firstOrNull { it.isActive }
+        set(value) {
+            editorStates.forEach { it.isActive = false }
+            value?.isActive = true
+            updateRenderedContent()
+        }
 
     @Volatile private var typingTime = Instant.now()
     @Volatile private var isShowCarriage = true
 
     init {
-        thread(start = true, isDaemon = true) {
-            while (true) {
-                Thread.sleep(500)
-                if (Duration.between(typingTime, Instant.now()).seconds >= 1) {
-                    isShowCarriage = !isShowCarriage
-                    updateRenderedContent()
-                }
+        thread(start = true, isDaemon = true, block = this::carriageLoop)
+    }
+
+    private fun carriageLoop() {
+        while (true) {
+            Thread.sleep(500)
+            if (Duration.between(typingTime, Instant.now()).seconds >= 1) {
+                isShowCarriage = !isShowCarriage
+                updateRenderedContent()
             }
         }
     }
 
-    fun setActiveEditor(editorState: EditorState) {
-        editorStates.forEach { it.isActive = false }
-        editorState.isActive = true
-        updateRenderedContent()
-    }
-
-    private fun openEditor(file: File) {
+    fun openEditor(file: File) {
         val editorState = EditorState(
             fileName = file.name,
             isActive = false,
         )
         editorStates.add(editorState)
-        setActiveEditor(editorState)
+        activeEditorState = editorState
     }
 
     fun closeEditor(editorState: EditorState) {
@@ -76,26 +79,23 @@ class MainWindowState(
     }
 
     fun onKeyEvent(keyEvent: KeyEvent): Boolean {
-        editorStates.firstOrNull { it.isActive }?.onKeyEvent(keyEvent) ?: return false
+        activeEditorState?.onKeyEvent(keyEvent) ?: return false
         typingTime = Instant.now()
         isShowCarriage = true
         updateRenderedContent()
         return true
     }
 
-    fun updateRenderedContent() {
-        updateRenderedContent(renderedContent.width, renderedContent.height)
-    }
-
-    fun updateRenderedContent(width: Int, height: Int) {
-        // Start at EditorRange() and end at EditorRange(), will be faster
-        val editor = editorStates.firstOrNull { it.isActive } ?: return
+    fun updateRenderedContent(width: Int = renderedContent.width, height: Int = renderedContent.height) {
+        // TODO: Start at EditorRange() and end at EditorRange(), will be faster
+        val editor = activeEditorState ?: return
         renderedContent = SkijaBuilder(
-            editor.content.getLinesRawContent(),
-            editor.carriagePosition,
-            isShowCarriage,
-            width,
-            height,
+            content = editor.textState.pieceTree.getLinesRawContent(),
+            carriagePosition = editor.textState.carriageAbsoluteOffset,
+            isShowCarriage = isShowCarriage,
+            width = width,
+            height = height,
+            textState = editor.textState,
         ).buildView()
     }
 }
