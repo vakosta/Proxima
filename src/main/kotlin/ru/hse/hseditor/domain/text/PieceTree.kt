@@ -133,6 +133,11 @@ internal class PieceTreeNode(
         left = SENTINEL
         right = SENTINEL
     }
+
+    override fun toString(): String =
+        "Piece buffer: (${piece.chunkDesc.bufferKind},${piece.chunkDesc.bufferIndex}) colored $color" +
+                "\nStarts at (${piece.chunkStartPos.lineFeedsNo},${piece.chunkStartPos.charsAfterLastLF}), " +
+                "ends at (${piece.chunkEndPos.lineFeedsNo},${piece.chunkEndPos.charsAfterLastLF})"
 }
 
 //endregion
@@ -222,6 +227,27 @@ class PieceTree(
 
     private val mySearchCache = PieceTreeSearchCache(10)
 
+    /**
+     * Outputs the internal structure of this [PieceTree] for the debug purposes.
+     */
+    override fun toString(): String {
+        val leftmostChild = myRoot.leftmostChild
+        val sb = StringBuilder()
+
+        var travNode = leftmostChild
+        while (travNode != SENTINEL) {
+            sb.append(travNode.toString()).append("\n").append("Text: \"").append(
+                lookupChunkByDescriptor(travNode.piece.chunkDesc).chunkSubstring(
+                    getOffsetInChunk(travNode.piece.chunkDesc, travNode.piece.chunkStartPos),
+                    getOffsetInChunk(travNode.piece.chunkDesc, travNode.piece.chunkEndPos)
+                )
+            ).append("\"\n")
+            travNode = travNode.next
+        }
+
+        return sb.toString()
+    }
+
     init {
         initPiecesFromFileChunks()
         recomputeGlobalTextMetadata()
@@ -269,7 +295,10 @@ class PieceTree(
             val node = startLookup.node
             val chunk = lookupChunkByDescriptor(node.piece.chunkDesc)
             val startOffset = getOffsetInChunk(node.piece.chunkDesc, node.piece.chunkStartPos)
-            return chunk.chunkSubstring(startOffset + startLookup.pieceOffset, startOffset + endLookupResult.pieceOffset)
+            return chunk.chunkSubstring(
+                startOffset + startLookup.pieceOffset,
+                startOffset + endLookupResult.pieceOffset
+            )
         }
 
         var travNode = startLookup.node
@@ -512,7 +541,7 @@ class PieceTree(
 
         // We should delete the nodes in between
         var travNode = startNode.next
-        while (travNode != SENTINEL) {
+        while (travNode != endNode) {
             nodesToDelete.add(travNode)
             travNode = travNode.next
         }
