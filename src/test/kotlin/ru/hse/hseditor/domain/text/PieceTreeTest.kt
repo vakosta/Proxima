@@ -25,6 +25,16 @@ class PieceTreeTest {
         }
     }
 
+    private fun PieceTree.deleteCharByChar(fromOffset: Int, cnt: Int) {
+        val resBuilder = StringBuilder().apply { append(getLinesRawContent()) }
+        for (i in (fromOffset - cnt..fromOffset).reversed()) {
+            deleteAfter(i, 1)
+            resBuilder.delete(i, i + 1)
+            val content = getLinesRawContent()
+            assertEquals(resBuilder.toString(), content)
+        }
+    }
+
     @Test
     fun `basic add`() {
         val pieceTreeBuilder = PieceTreeBuilder()
@@ -113,5 +123,18 @@ class PieceTreeTest {
         pieceTree.deleteAfter(str.length - 2, 1)
 
         assertEquals("ac", pieceTree.getLinesRawContent())
+    }
+
+    @Test
+    fun `the kek example (insert 2 middle) works`() {
+        val pieceTree = PieceTreeBuilder().build()
+
+        pieceTree.addCharByCharAndAssertWithPrefix("val kek = 123", 0)
+        pieceTree.deleteAfter(6)
+        assertEquals("val ke = 123", pieceTree.getLinesRawContent())
+        pieceTree.insert("k", 6)
+        assertEquals("val kek = 123", pieceTree.getLinesRawContent())
+        pieceTree.deleteAfter(6)
+        assertEquals("val ke = 123", pieceTree.getLinesRawContent())
     }
 }

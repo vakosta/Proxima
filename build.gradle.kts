@@ -17,7 +17,7 @@ repositories {
 }
 
 dependencies {
-    testImplementation(kotlin("test-junit5", "1.5.10"))
+    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5:1.5.31")
 
     implementation(compose.desktop.currentOs)
     implementation(kotlin("stdlib-jdk8"))
