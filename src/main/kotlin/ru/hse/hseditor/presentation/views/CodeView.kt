@@ -1,5 +1,6 @@
 package ru.hse.hseditor.presentation.views
 
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -19,6 +20,8 @@ fun CodeView(
         contentDescription = "",
         contentScale = ContentScale.Crop,
         alignment = Alignment.TopStart,
-        modifier = Modifier.onGloballyPositioned { onGloballyPositioned(it) }
+        modifier = Modifier
+            .fillMaxSize()
+            .onGloballyPositioned { onGloballyPositioned(it) }
     )
 }
