@@ -21,6 +21,18 @@ abstract class Lifetime(
 ) {
     private val myOnTerminateList = mutableListOf<() -> Unit>()
 
+    var myIsTerminated = false
+    val isTerminated get() = myIsTerminated
+
+    init {
+        myOnTerminateList.add {
+            if (scope.isActive) scope.cancel("Lifetime ended.")
+        }
+        myOnTerminateList.add {
+            myIsTerminated = true
+        }
+    }
+
     fun alsoOnTerminate(block: () -> Unit) = myOnTerminateList.add(block)
 
     fun alsoBracket(begin: () -> Unit, end: () -> Unit) {
@@ -29,39 +41,8 @@ abstract class Lifetime(
     }
 
     internal fun terminate() = myOnTerminateList.forEach { it() }
-}
 
-class UiLifetimeDef(
-    lifetimeId: String, parentLifetime: UiLifetime? = null
-) : LifetimeDef(lifetimeId, parentLifetime) {
-    override val lifetime = UiLifetime(
-        lifetimeId,
-        parentLifetime?.scope ?: MainScope()
-    )
-}
+    fun scopedLaunch(block: suspend () -> Unit) = if (isTerminated) null else scope.launch { block() }
 
-class UiLifetime(
-    id: String,
-    scope: CoroutineScope
-) : Lifetime(id, scope) {
-    fun launchUiAction(block: () -> Unit) = scope.launch { block() }
-    fun <T> asyncUiAction(block: () -> T) = scope.async { block() }
-}
-
-class BackgroundLifetimeDef(
-    lifetimeId: String,
-    parentLifetime: UiLifetime? = null
-) : LifetimeDef(lifetimeId, parentLifetime) {
-    override val lifetime = BackgroundLifetime(
-        lifetimeId,
-        parentLifetime?.scope ?: CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    )
-}
-
-class BackgroundLifetime(
-    id: String,
-    scope: CoroutineScope
-) : Lifetime(id, scope) {
-    fun launchBackgroundAction(block: () -> Unit) = scope.launch { block() }
-    fun <T> asyncBackgroundAction(block: () -> T) = scope.launch { block() }
+    fun <T> scopedAsync(block: suspend () -> T) = if (isTerminated) null else scope.async { block() }
 }

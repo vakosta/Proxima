@@ -3,10 +3,6 @@ package ru.hse.hseditor.domain.text
 import ru.hse.hseditor.domain.text.file.FileChunk
 import ru.hse.hseditor.domain.text.file.getLineStartOffsetsList
 
-// So, remember how Java uses UTF-16 for ALL text?
-// Yeah, it does, but when it encounters any BOM sequence in a UTF-encoded file
-// it freaks out and reads it as the UTF-16 BE BOM, which is exactly FE FF.
-// Java is a drunk and needs help.
 internal const val UTF_BOM = '\uFEFF'
 
 private fun String.hasUtfBom() = first() == UTF_BOM
@@ -32,7 +28,7 @@ class PieceTreeBuilder {
     }
 
     fun build(): PieceTree {
-        // Normalize eof to /n
+        // Normalize eol to /n
         for (i in myChunks.indices) {
             val normalizedStr = myChunks[i].chunk.replace(Regex("\r\n"), "\n")
             if (myChunks[i].chunk.length != normalizedStr.length) {
