@@ -1,23 +1,30 @@
-package ru.hse.hseditor.domain.app
+package ru.hse.hseditor.domain.app.lifetimes
 
 import kotlinx.coroutines.*
 
-abstract class LifetimeDef(
+private val appBackgroundDispatcher = Dispatchers.Default
+
+fun defineLifetime(id: String) =
+    LifetimeDef(id, Lifetime(id, CoroutineScope(appBackgroundDispatcher + SupervisorJob())))
+
+fun defineChildLifetime(parentLifetime: Lifetime, id: String) =
+    LifetimeDef(id, Lifetime(id, CoroutineScope(appBackgroundDispatcher + SupervisorJob())), parentLifetime)
+
+class LifetimeDef internal constructor(
     private val myLifetimeId: String,
+    val lifetime: Lifetime,
     internal val parentLifetime: Lifetime? = null
 ) {
     init { parentLifetime?.alsoOnTerminate { terminateLifetime() } }
-
-    abstract val lifetime: Lifetime
 
     fun terminateLifetime() = lifetime.terminate()
 
     val id get() = "DefinitionOf::$myLifetimeId"
 }
 
-abstract class Lifetime(
+class Lifetime internal constructor(
     val id: String,
-    internal val scope: CoroutineScope
+    private val scope: CoroutineScope
 ) {
     private val myOnTerminateList = mutableListOf<() -> Unit>()
 

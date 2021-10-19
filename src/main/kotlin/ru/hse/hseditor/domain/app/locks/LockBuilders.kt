@@ -1,8 +1,7 @@
 package ru.hse.hseditor.domain.app.locks
 
-import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.runBlocking
-import ru.hse.hseditor.domain.app.Lifetime
+import ru.hse.hseditor.domain.app.lifetimes.Lifetime
 import ru.hse.hseditor.domain.app.exceptions.ActionNotExecutedException
 
 fun <T> runBlockingRead(block: () -> T, canExecuteBlock: (() -> Boolean)? = null): T {

@@ -1,5 +1,7 @@
 package ru.hse.hseditor.domain.app
 
+import ru.hse.hseditor.domain.app.lifetimes.Lifetime
+
 // TODO @thisisvolatile Reactive threading?
 
 class Event<T>(

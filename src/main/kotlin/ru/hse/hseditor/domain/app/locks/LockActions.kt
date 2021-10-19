@@ -2,7 +2,7 @@ package ru.hse.hseditor.domain.app.locks
 
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.job
-import ru.hse.hseditor.domain.app.Lifetime
+import ru.hse.hseditor.domain.app.lifetimes.Lifetime
 import kotlin.coroutines.CoroutineContext
 
 abstract class CoroutineAction internal constructor() {
