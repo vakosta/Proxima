@@ -6,34 +6,43 @@ import java.nio.file.*
 import kotlin.concurrent.thread
 import kotlin.io.path.isDirectory
 
+// Save/read for individual files.
+// DEBOUNCE !!!
 // Modification tracker
 // Autosaver ??
-// DEBOUNCE !!!
-// Save/read for individual files.
-// Paging??? maybe later, i trust in the PieceTree
 
 fun mountVFSAtPathLifetimed(
     lifetime: Lifetime,
-    path: Path,
+    absoluteRootDirPath: Path,
     linkOption: LinkOption = LinkOption.NOFOLLOW_LINKS
 ): OsVirtualFileSystem {
-    require(path.isAbsolute) { "May only mount at an absolute path!" }
-    require(path.isDirectory(linkOption)) { "Cannot mount a non-directory!" }
+    require(absoluteRootDirPath.isAbsolute) { "May only mount at an absolute path!" }
+    require(absoluteRootDirPath.isDirectory(linkOption)) { "Cannot mount a non-directory!" }
 
     // Java interop is ugly.
 
-    val watcher = path.fileSystem.newWatchService()
+    val watcher = absoluteRootDirPath.fileSystem.newWatchService()
     val watcherLifetime = defineChildLifetime(lifetime, "OsVirtualFileSystem::WatcherLifetime").lifetime
     watcherLifetime.alsoOnTerminate { watcher.close() }
 
+    val watcherDescriptor = WatcherDescriptor(watcherLifetime, watcher)
+    val vfsStub = OsVirtualFileSystem(
+        lifetime,
+        watcherDescriptor,
+        absoluteRootDirPath
+    )
+
     // TODO support interrupts??
-    val visitor = MountVFSFileVisitor(watcher)
-    Files.walkFileTree(path, visitor)
+    val visitor = MountVFSFileVisitor(watcher, vfsStub)
+    Files.walkFileTree(absoluteRootDirPath, visitor)
     if (visitor.exception != null) {
         throw visitor.exception!! // mamoy klyanus'!!
     }
 
-    return OsVirtualFileSystem(lifetime, WatcherDescriptor(watcherLifetime, watcher), visitor.root)
+    vfsStub.root = visitor.root
+    watcherDescriptor.startWatching()
+    // If we are here with no exceptions, it is no longer a stub!
+    return vfsStub
 }
 
 internal class WatcherDescriptor(val lifetime: Lifetime, val watcher: WatchService) {
@@ -72,11 +81,9 @@ internal class WatcherDescriptor(val lifetime: Lifetime, val watcher: WatchServi
 class OsVirtualFileSystem internal constructor(
     private val myLifetime: Lifetime,
     private val myWatcherDescriptor: WatcherDescriptor,
-    val root: OsVirtualDirectory
+    val absoluteRootPath: Path
 ) {
-
-    init {
-    }
+    lateinit var root: OsVirtualDirectory
 
     fun resolveFileAbsoluteOrNull(path: Path): OsVirtualFile? {
         require(path.isAbsolute) { "Path wasn't absolute!" }

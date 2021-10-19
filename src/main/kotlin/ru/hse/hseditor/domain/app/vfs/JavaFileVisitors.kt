@@ -7,7 +7,8 @@ import java.nio.file.*
 import java.nio.file.attribute.BasicFileAttributes
 
 internal class MountVFSFileVisitor(
-    private val myWatcher: WatchService
+    private val myWatcher: WatchService,
+    private val myVsfStub: OsVirtualFileSystem
 ) : FileVisitor<Path> {
     private val myDirectoryStack = stackOf<OsVirtualDirectory>()
 
@@ -23,15 +24,16 @@ internal class MountVFSFileVisitor(
 
         lateinit var vDir: OsVirtualDirectory
         if (myRoot == null) {
-            vDir = OsVirtualDirectory(myDirectoryStack.topOrNull(), dir.relativize(dir))
+            vDir = OsVirtualDirectory(myDirectoryStack.topOrNull(), dir.relativize(dir), myVsfStub)
             myRoot = vDir
         } else {
-            vDir = OsVirtualDirectory(myDirectoryStack.top(), root.path.relativize(dir))
+            vDir = OsVirtualDirectory(myDirectoryStack.top(), root.path.relativize(dir), myVsfStub)
         }
 
         myDirectoryStack.push(vDir)
 
-        dir.register(myWatcher,
+        dir.register(
+            myWatcher,
             StandardWatchEventKinds.ENTRY_CREATE,
             StandardWatchEventKinds.ENTRY_DELETE,
             StandardWatchEventKinds.ENTRY_MODIFY
@@ -45,9 +47,21 @@ internal class MountVFSFileVisitor(
         require(attrs != null) { "Null file attributes encountered while mounting a directory!" }
 
         if (attrs.isSymbolicLink) {
-            myDirectoryStack.top().mutChildren.add(OsVirtualSymlink(myDirectoryStack.top(), root.path.relativize(file)))
+            myDirectoryStack.top().mutChildren.add(
+                OsVirtualSymlink(
+                    myDirectoryStack.top(),
+                    root.path.relativize(file),
+                    myVsfStub
+                )
+            )
         } else if (attrs.isRegularFile) {
-            myDirectoryStack.top().mutChildren.add(OsVirtualFile(myDirectoryStack.top(), root.path.relativize(file)))
+            myDirectoryStack.top().mutChildren.add(
+                OsVirtualFile(
+                    myDirectoryStack.top(),
+                    root.path.relativize(file),
+                    myVsfStub
+                )
+            )
         } else {
             // Warn?
         }

@@ -1,7 +1,6 @@
 package ru.hse.hseditor.domain.text
 
-import ru.hse.hseditor.domain.text.file.DiffChunk
-import ru.hse.hseditor.domain.text.file.FileChunk
+import ru.hse.hseditor.domain.text.document.EditorRange
 import ru.hse.hseditor.domain.text.file.getLineStartOffsetsList
 
 // TODO @thisisvolatile maybe do a refactoring of the internal API?
@@ -12,6 +11,56 @@ import ru.hse.hseditor.domain.text.file.getLineStartOffsetsList
 internal const val PREFERRED_PIECE_TREE_CHUNK_SIZE = 65535
 
 internal enum class ChunkKind { FILE, DIFF }
+
+interface CharacterChunk {
+    val chunk: String
+    var lineStartOffsets: List<Int>
+
+    val chunkLength: Int
+
+    val isEmpty: Boolean
+
+    fun chunkSubstring(start: Int, end: Int): String
+}
+
+/**
+ * An immutable chunk of original file text
+ */
+data class FileChunk(
+    override val chunk: String,
+    override var lineStartOffsets: List<Int>
+) : CharacterChunk {
+
+    override val isEmpty get() = chunkLength == 0
+
+    override val chunkLength get() = chunk.length
+
+    override fun chunkSubstring(start: Int, end: Int) = chunk.substring(start, end)
+}
+
+/**
+ * A mutable chunk that receives all the new text added to the PieceTree
+ * via it's [commit] method.
+ */
+data class DiffChunk(
+    private val diffBuilder: StringBuilder,
+    private val myLineStartOffsets: MutableList<Int>
+) : CharacterChunk {
+
+    override var lineStartOffsets: List<Int> = myLineStartOffsets
+    override val chunk get() = diffBuilder.toString()
+
+    override val chunkLength get() = diffBuilder.length
+    override val isEmpty get() = chunkLength == 0
+
+    fun commit(str: String) {
+        diffBuilder.append(str)
+    }
+
+    override fun chunkSubstring(start: Int, end: Int): String {
+        return diffBuilder.substring(start, end)
+    }
+}
 
 /**
  * Used in [PieceTreeSearchCache] as a return type.

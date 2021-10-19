@@ -34,8 +34,6 @@ class Lifetime internal constructor(
     init {
         myOnTerminateList.add {
             if (scope.isActive) scope.cancel("Lifetime ended.")
-        }
-        myOnTerminateList.add {
             myIsTerminated = true
         }
     }

@@ -14,7 +14,7 @@ class Event<T>(
 
     fun fire(withValue: T) = myListeners.forEach { it(withValue) }
 
-    fun listenLifetimed(lifetime: Lifetime, block: (T) -> Unit) {
+    fun advise(lifetime: Lifetime, block: (T) -> Unit) {
         myListeners.add(block)
         lifetime.alsoOnTerminate { myListeners.remove(block) }
     }
