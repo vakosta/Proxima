@@ -10,6 +10,8 @@ plugins {
 group = "ru.hse"
 version = "1.0"
 
+val koinVersion = "3.1.2"
+
 repositories {
     google()
     mavenCentral()
@@ -17,10 +19,12 @@ repositories {
 }
 
 dependencies {
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5:1.5.31")
-
     implementation(compose.desktop.currentOs)
     implementation(kotlin("stdlib-jdk8"))
+    implementation("io.insert-koin:koin-core:$koinVersion")
+
+    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5:1.5.31")
+    testImplementation("io.insert-koin:koin-test:$koinVersion")
 }
 
 tasks.test {

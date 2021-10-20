@@ -70,7 +70,7 @@ fun MainWindow(state: MainWindowState) = Window(
                     .fillMaxWidth()
                     .border(width = 0.5.dp, color = Color(209, 209, 209))
             ) {
-                items(state.editors) { editorState ->
+                items(state.editorStates) { editorState ->
                     Tab(
                         state = editorState,
                         onClick = { state.setActiveEditor(editorState) },
@@ -79,8 +79,8 @@ fun MainWindow(state: MainWindowState) = Window(
                 }
             }
             CodeView(
-                isVisible = state.editors.isNotEmpty(),
-                code = state.fileContentRendered,
+                isVisible = state.editorStates.isNotEmpty(),
+                code = state.renderedContent,
                 onGloballyPositioned = {
                     state.updateRenderedContent(it.size.width, it.size.height)
                 }
