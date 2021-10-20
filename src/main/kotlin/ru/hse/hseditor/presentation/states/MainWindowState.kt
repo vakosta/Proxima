@@ -16,6 +16,9 @@ import org.koin.core.component.inject
 import ru.hse.hseditor.domain.filesystem.FileSystemManager
 import ru.hse.hseditor.domain.skija.SkijaBuilder
 import ru.hse.hseditor.presentation.model.File
+import java.time.Duration
+import java.time.Instant
+import kotlin.concurrent.thread
 
 class MainWindowState(
     override var placement: WindowPlacement = WindowPlacement.Floating,
@@ -26,13 +29,28 @@ class MainWindowState(
 
     private val fileSystemManager: FileSystemManager by inject()
 
+    var renderedContent: ImageBitmap by mutableStateOf(
+        SkijaBuilder("", 0, true, 300, 300).buildView()
+    )
+
     val panelState: PanelState by mutableStateOf(PanelState())
     val fileTreeState: FileTree = FileTree(fileSystemManager.getBaseDirectory(), this::openEditor)
     val editorStates: MutableList<EditorState> = mutableStateListOf()
 
-    var renderedContent: ImageBitmap by mutableStateOf(
-        SkijaBuilder("", 0, 300, 300).buildView()
-    )
+    @Volatile private var typingTime = Instant.now()
+    @Volatile private var isShowCarriage = true
+
+    init {
+        thread(start = true, isDaemon = true) {
+            while (true) {
+                Thread.sleep(500)
+                if (Duration.between(typingTime, Instant.now()).seconds >= 1) {
+                    isShowCarriage = !isShowCarriage
+                    updateRenderedContent()
+                }
+            }
+        }
+    }
 
     fun setActiveEditor(editorState: EditorState) {
         editorStates.forEach { it.isActive = false }
@@ -59,6 +77,8 @@ class MainWindowState(
 
     fun onKeyEvent(keyEvent: KeyEvent): Boolean {
         editorStates.firstOrNull { it.isActive }?.onKeyEvent(keyEvent) ?: return false
+        typingTime = Instant.now()
+        isShowCarriage = true
         updateRenderedContent()
         return true
     }
@@ -68,12 +88,14 @@ class MainWindowState(
     }
 
     fun updateRenderedContent(width: Int, height: Int) {
+        // Start at EditorRange() and end at EditorRange(), will be faster
         val editor = editorStates.firstOrNull { it.isActive } ?: return
         renderedContent = SkijaBuilder(
             editor.content.getLinesRawContent(),
             editor.carriagePosition,
+            isShowCarriage,
             width,
-            height
+            height,
         ).buildView()
     }
 }

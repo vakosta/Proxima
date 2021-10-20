@@ -8,23 +8,27 @@ import org.jetbrains.skija.Paint
 import org.jetbrains.skija.Surface
 import org.jetbrains.skija.TextLine
 import org.jetbrains.skija.Typeface
+import ru.hse.hseditor.domain.color.ColorService
+import ru.hse.hseditor.domain.common.COLOR_BLACK
 
 class SkijaBuilder(
     private val content: String,
     private val carriagePosition: Int,
+    private val isShowCarriage: Boolean,
     width: Int,
     height: Int,
 ) {
 
+    private val colorService: ColorService = ColorService(
+        content,
+        ColorService.Language.Kotlin,
+    )
+
     private val surface: Surface = Surface.makeRasterN32Premul(width, height)
-    private val paint = Paint()
+    private val paint: Paint = Paint()
 
     private var x = BASE_X
     private var y = BASE_Y
-
-    init {
-        paint.color = -0xFFFFFF
-    }
 
     fun buildView(): ImageBitmap {
         paintOnCanvas(surface.canvas, paint)
@@ -37,16 +41,16 @@ class SkijaBuilder(
     ) {
         for (i in content.indices) {
             val c: Char = content[i]
-            if (carriagePosition == i) {
+            if (carriagePosition == i && isShowCarriage) {
                 drawCarriage(canvas, paint)
             }
             if (c != '\n') {
-                addChar(c, canvas, paint)
+                addChar(c, i, canvas, paint)
             } else {
                 addNewLine()
             }
         }
-        if (carriagePosition == content.length) {
+        if (carriagePosition == content.length && isShowCarriage) {
             drawCarriage(canvas, paint)
         }
     }
@@ -58,9 +62,11 @@ class SkijaBuilder(
 
     private fun addChar(
         c: Char,
+        charPosition: Int,
         canvas: Canvas,
-        paint: Paint
+        paint: Paint,
     ) {
+        paint.color = colorService.getCharColor(charPosition)
         val textLine = TextLine.make(c.toString(), font)
         canvas.drawTextLine(textLine, x, y, paint)
         x += (textLine.width + 1).toInt()
@@ -70,6 +76,7 @@ class SkijaBuilder(
         canvas: Canvas,
         paint: Paint,
     ) {
+        paint.color = COLOR_BLACK
         canvas.drawLine(x, y + font.metrics.ascent, x, y + font.metrics.descent, paint)
     }
 
