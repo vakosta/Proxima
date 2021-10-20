@@ -24,7 +24,7 @@ class ExpandableFile(
     }
 }
 
-class FileTree(root: File) {
+class FileTree(root: File, val openFile: (file: File) -> Unit) {
     private val expandableRoot = ExpandableFile(root, 0)/*.apply {
         toggleExpanded()
     }*/
@@ -46,9 +46,10 @@ class FileTree(root: File) {
             }
 
         fun open() = when (type) {
-            is ItemType.Folder -> file.toggleExpanded()
-            is ItemType.File -> {
-            }
+            is ItemType.Folder ->
+                file.toggleExpanded()
+            is ItemType.File ->
+                openFile(file.file)
         }
     }
 

@@ -79,6 +79,7 @@ fun MainWindow(state: MainWindowState) = Window(
                 }
             }
             CodeView(
+                isVisible = state.editors.isNotEmpty(),
                 code = state.fileContentRendered,
                 onGloballyPositioned = {
                     state.updateRenderedContent(it.size.width, it.size.height)

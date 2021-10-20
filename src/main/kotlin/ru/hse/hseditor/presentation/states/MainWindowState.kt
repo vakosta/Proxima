@@ -11,27 +11,21 @@ import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.WindowSize
 import androidx.compose.ui.window.WindowState
+import ru.hse.hseditor.domain.filesystem.FileSystemManager
 import ru.hse.hseditor.domain.skija.SkijaBuilder
 import ru.hse.hseditor.presentation.model.File
-import ru.hse.hseditor.presentation.model.getFile
 
 class MainWindowState(
     override var placement: WindowPlacement = WindowPlacement.Floating,
     override var isMinimized: Boolean = false,
     override var position: WindowPosition = WindowPosition.PlatformDefault,
     override var size: WindowSize = WindowSize(800.dp, 600.dp),
+    fileSystemManager: FileSystemManager = FileSystemManager(),
 ) : WindowState {
 
     val panelState by mutableStateOf(PanelState())
-
-    val fileTreeState: FileTree =
-        FileTree(File("Kek", true, listOf(getFile(), getFile(), getFile()), true))
-    val editors: MutableList<EditorState> = mutableStateListOf(
-        EditorState("Kek.kt", false),
-        EditorState("MainWindowState.kt", true),
-        EditorState("MainWindowNeState.kt", false),
-        EditorState("LolKekCheburek.java", false),
-    )
+    val fileTreeState: FileTree = FileTree(fileSystemManager.getBaseDirectory(), this::openEditor)
+    val editors: MutableList<EditorState> = mutableStateListOf()
 
     var fileContentRendered: ImageBitmap by mutableStateOf(
         SkijaBuilder("", 0, 300, 300).buildView()
@@ -43,6 +37,15 @@ class MainWindowState(
         updateRenderedContent()
     }
 
+    private fun openEditor(file: File) {
+        val editorState = EditorState(
+            fileName = file.name,
+            isActive = false,
+        )
+        editors.add(editorState)
+        setActiveEditor(editorState)
+    }
+
     fun closeEditor(editorState: EditorState) {
         if (editorState.isActive) {
             editors.firstOrNull { !it.isActive }?.isActive = true
@@ -52,7 +55,7 @@ class MainWindowState(
     }
 
     fun onKeyEvent(keyEvent: KeyEvent): Boolean {
-        editors.first { it.isActive }.onKeyEvent(keyEvent)
+        editors.firstOrNull { it.isActive }?.onKeyEvent(keyEvent) ?: return false
         updateRenderedContent()
         return true
     }
@@ -62,7 +65,7 @@ class MainWindowState(
     }
 
     fun updateRenderedContent(width: Int, height: Int) {
-        val editor = editors.first { it.isActive }
+        val editor = editors.firstOrNull { it.isActive } ?: return
         fileContentRendered = SkijaBuilder(
             editor.content.getLinesRawContent(),
             editor.carriagePosition,

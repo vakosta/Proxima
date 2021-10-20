@@ -77,6 +77,8 @@ class SkijaBuilder(
         private const val BASE_X = 5F
         private const val BASE_Y = 23F
 
+        private const val TEXT_SIZE = 14F
+
         private const val FONT_PATH = "./src/main/resources/fonts/jetbrainsmono/JetBrainsMono-Regular.ttf"
 
         private var _font: Font? = null
@@ -84,7 +86,7 @@ class SkijaBuilder(
             get() {
                 if (_font == null) {
                     val typeface = Typeface.makeFromFile(FONT_PATH)
-                    _font = Font(typeface, 14F)
+                    _font = Font(typeface, TEXT_SIZE)
                 }
                 return _font!!
             }

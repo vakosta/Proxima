@@ -6,12 +6,12 @@ class File(
     val name: String,
     val isDirectory: Boolean,
     val children: List<File>,
-    val hasChildren: Boolean
+    val hasChildren: Boolean,
 ) {
     fun readLines(scope: CoroutineScope): TextLines {
         return BaseTextLines
     }
 }
 
-fun getFile(): File =
-    File("Kek", false, listOf(), false)
+fun getFile(name: String = "Kek.kt"): File =
+    File(name, false, listOf(), false)
