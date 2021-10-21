@@ -4,7 +4,11 @@ import ru.hse.hseditor.domain.text.PieceTree
 
 
 interface Document {
+    fun fetchLinesSequence(range: IntRange): Sequence<String>
 
+
+    val isSyncedWithDisc: Boolean
+    val lineCount: Int
 }
 
 class PieceTreeDocument(
@@ -13,6 +17,15 @@ class PieceTreeDocument(
 
     // Add in a text buffer.
 
-    var isSyncedWithDisc = true
+    override val isSyncedWithDisc get() = myIsSyncedWithDisc
+    private var myIsSyncedWithDisc = true
 
+    override val lineCount get() = text.lineCount
+
+    override fun fetchLinesSequence(range: IntRange) = sequence {
+        range.forEach { yield(text.getLineContent(it)) }
+    }
+
+    fun fetchLines(range: IntRange) {
+    }
 }

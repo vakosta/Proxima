@@ -7,8 +7,12 @@ import ru.hse.hseditor.domain.text.document.Document
 import ru.hse.hseditor.domain.text.document.DocumentSource
 import ru.hse.hseditor.domain.text.document.PieceTreeDocument
 import ru.hse.hseditor.domain.text.file.getLineStartOffsetsList
+import java.nio.charset.Charset
+import java.nio.file.OpenOption
 import java.nio.file.Path
+import java.nio.file.StandardOpenOption
 import kotlin.io.path.bufferedReader
+import kotlin.io.path.writeLines
 
 private val listEmpty = listOf<VFSNode>()
 
@@ -42,7 +46,7 @@ class OsVirtualFile(
     override val parent: OsVFSNode?,
     override val path: Path,
     override val fileSystem: OsVirtualFileSystem
-) : OsVFSNode, DocumentSource {
+) : OsVFSNode, DocumentSource() {
     override val children get() = listEmpty
 
     override fun makeDocument(): Document {
@@ -50,13 +54,23 @@ class OsVirtualFile(
         fetchFileChunksSequence(fileSystem.absoluteRootPath.resolve(path))
             .forEach { pieceTreeBuilder.acceptFileChunk(it) }
 
-        return PieceTreeDocument(pieceTreeBuilder.build())
+        myDocument = PieceTreeDocument(pieceTreeBuilder.build())
+        return myDocument
     }
 
-    override fun commitDocument(document: Document) {
+    override fun commitDocument() {
         // TODO we can do diffs here, but it would probably require some sort of
         // TODO file indexing, so... no diffs, many excess calculations!
-        // COPY IN BUNCHES OF 1000 LINES
+        // TODO this need testing...
+        fileSystem.absoluteRootPath.resolve(path).writeLines(
+            myDocument.fetchLinesSequence(1..myDocument.lineCount),
+            Charset.defaultCharset(),
+            StandardOpenOption.TRUNCATE_EXISTING
+        )
+    }
+
+    override fun refreshDocument() {
+
     }
 }
 

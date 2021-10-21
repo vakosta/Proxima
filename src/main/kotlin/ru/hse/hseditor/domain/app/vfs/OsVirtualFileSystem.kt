@@ -6,8 +6,6 @@ import java.nio.file.*
 import kotlin.concurrent.thread
 import kotlin.io.path.isDirectory
 
-// Save/read for individual files.
-// DEBOUNCE !!!
 // Modification tracker
 // Autosaver ??
 

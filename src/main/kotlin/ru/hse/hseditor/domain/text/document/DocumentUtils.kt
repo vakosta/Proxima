@@ -1,8 +1,11 @@
 package ru.hse.hseditor.domain.text.document
 
-interface DocumentSource {
-    fun makeDocument(): Document
-    fun commitDocument(document: Document)
+abstract class DocumentSource {
+    abstract fun makeDocument(): Document
+    abstract fun commitDocument()
+    abstract fun refreshDocument()
+
+    protected lateinit var myDocument: Document
 }
 
 data class EditorRange(

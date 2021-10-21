@@ -1,5 +1,8 @@
 package ru.hse.hseditor.domain.app
 
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import ru.hse.hseditor.domain.app.lifetimes.Lifetime
 
 // TODO @thisisvolatile Reactive threading?
@@ -37,4 +40,24 @@ class Property<T>(
         }
 
     val updatedEvent = Event<T>(id, myLifetime)
+}
+
+class DebounceEvent(
+    val id: String,
+    private val myLifetime: Lifetime,
+    private val myEventDelayMs: Long,
+) {
+    private val myEvent = Event<Unit>("$id::Backing Event", myLifetime)
+
+    fun adviseOnFinish(lifetime: Lifetime, block: (Unit) -> Unit) = myEvent.advise(lifetime, block)
+
+    fun bounce() {
+        myThrottleJob?.cancel()
+        myThrottleJob = myLifetime.scopedLaunch {
+            delay(myEventDelayMs)
+            myEvent.fire(Unit)
+        } ?: throw IllegalStateException("Lifetime terminated")
+    }
+
+    private var myThrottleJob: Job? = null
 }
