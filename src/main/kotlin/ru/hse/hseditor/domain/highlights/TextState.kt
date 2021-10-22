@@ -11,6 +11,8 @@ import ru.hse.hseditor.domain.highlights.syntaxmanager.KotlinSyntaxManager
 import ru.hse.hseditor.domain.highlights.syntaxmanager.SyntaxManager
 import ru.hse.hseditor.domain.text.PieceTree
 import ru.hse.hseditor.domain.text.PieceTreeBuilder
+import java.util.logging.Level
+import java.util.logging.Logger
 import kotlin.math.max
 import kotlin.math.min
 
@@ -58,7 +60,7 @@ class TextState(
         } else if (carriageLineOffset != 0) {
             carriageLineOffset--
         }
-        println("$carriageLine $carriageLineOffset")
+        LOG.log(Level.INFO, "Carriage position: $carriageLine:$carriageLineOffset")
     }
 
     fun onPressedRightArrow() {
@@ -69,7 +71,7 @@ class TextState(
         } else if (carriageLineOffset != currentLine.length) {
             carriageLineOffset++
         }
-        println("$carriageLine $carriageLineOffset")
+        LOG.log(Level.INFO, "$carriageLine $carriageLineOffset")
     }
 
     fun onPressedBackspace() {
@@ -142,5 +144,9 @@ class TextState(
     enum class Language {
         Kotlin,
         Java,
+    }
+
+    companion object {
+        val LOG = Logger.getLogger(TextState::class.java.name)
     }
 }
