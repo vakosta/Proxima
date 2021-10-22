@@ -380,10 +380,9 @@ class PieceTree(
         val resBuilder = StringBuilder()
 
         var travNode = myRoot.leftmostChild
-        val end = myRoot.rigthmostChild
         var totalTextLen = 0
 
-        while (travNode != end) {
+        while (totalTextLen != myTextLength) {
             val chunk = lookupChunkByDescriptor(travNode.piece.chunkDesc)
             val startOffset = getOffsetInChunk(travNode.piece.chunkDesc, travNode.piece.chunkStartPos)
 
