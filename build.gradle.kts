@@ -38,6 +38,12 @@ tasks.test {
 
 tasks.withType<KotlinCompile> {
     kotlinOptions.jvmTarget = "11"
+tasks.withType<KotlinCompile> {
+    kotlinOptions {
+        languageVersion = "1.5"
+        apiVersion = "1.5"
+        jvmTarget = "11"
+    }
 }
 
 compose.desktop {
