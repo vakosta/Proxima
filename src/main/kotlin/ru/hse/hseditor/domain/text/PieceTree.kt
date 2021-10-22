@@ -392,6 +392,8 @@ class PieceTree(
             travNode = travNode.next
         }
 
+        require(totalTextLen == myTextLength) { "Text len does not match!" }
+
         return resBuilder.toString()
     }
 

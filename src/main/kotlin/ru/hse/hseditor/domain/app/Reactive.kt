@@ -3,9 +3,18 @@ package ru.hse.hseditor.domain.app
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.flow
 import ru.hse.hseditor.domain.app.lifetimes.Lifetime
 
 // TODO @thisisvolatile Reactive threading?
+
+fun tickerFlow(period: Long, initDelay: Long = 0) = flow {
+    delay(initDelay)
+    while (true) {
+        emit(Unit)
+        delay(period)
+    }
+}
 
 class Event<T>(
     val id: String,

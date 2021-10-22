@@ -28,16 +28,16 @@ dependencies {
     antlr("org.antlr:antlr4-runtime:$antlrVersion")
     antlr("org.antlr:antlr4-maven-plugin:$antlrVersion")
 
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5:1.5.31")
+//    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5:1.5.21")
     testImplementation("io.insert-koin:koin-test:$koinVersion")
+    testImplementation("io.insert-koin:koin-test-junit5:$koinVersion")
+
 }
 
 tasks.test {
     useJUnitPlatform()
 }
 
-tasks.withType<KotlinCompile> {
-    kotlinOptions.jvmTarget = "11"
 tasks.withType<KotlinCompile> {
     kotlinOptions {
         languageVersion = "1.5"
@@ -48,7 +48,7 @@ tasks.withType<KotlinCompile> {
 
 compose.desktop {
     application {
-        mainClass = "MainKt"
+        mainClass = "ru.hse.hseditor.MainKt"
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "HSEditor"

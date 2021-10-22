@@ -11,16 +11,25 @@ import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.WindowSize
 import androidx.compose.ui.window.WindowState
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.withContext
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
+import ru.hse.hseditor.domain.app.lifetimes.Lifetime
+import ru.hse.hseditor.domain.app.tickerFlow
 import ru.hse.hseditor.domain.filesystem.FileSystemManager
 import ru.hse.hseditor.domain.skija.SkijaBuilder
 import ru.hse.hseditor.presentation.model.File
-import java.time.Duration
 import java.time.Instant
 import kotlin.concurrent.thread
 
 class MainWindowState(
+    private val myLifetime: Lifetime,
     override var placement: WindowPlacement = WindowPlacement.Floating,
     override var isMinimized: Boolean = false,
     override var position: WindowPosition = WindowPosition.PlatformDefault,
@@ -41,15 +50,8 @@ class MainWindowState(
     @Volatile private var isShowCarriage = true
 
     init {
-        thread(start = true, isDaemon = true) {
-            while (true) {
-                Thread.sleep(500)
-                if (Duration.between(typingTime, Instant.now()).seconds >= 1) {
-                    isShowCarriage = !isShowCarriage
-                    updateRenderedContent()
-                }
-            }
-        }
+        // TODO extract a separete MainScope to a Lifetime
+        tickerFlow(500).onEach { /* Update render (maybe partial?) */ }.launchIn(MainScope())
     }
 
     fun setActiveEditor(editorState: EditorState) {
