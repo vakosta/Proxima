@@ -380,9 +380,10 @@ class PieceTree(
         val resBuilder = StringBuilder()
 
         var travNode = myRoot.leftmostChild
+        val end = myRoot.rigthmostChild
         var totalTextLen = 0
 
-        while (totalTextLen != myTextLength) {
+        while (travNode != end) {
             val chunk = lookupChunkByDescriptor(travNode.piece.chunkDesc)
             val startOffset = getOffsetInChunk(travNode.piece.chunkDesc, travNode.piece.chunkStartPos)
 
@@ -391,6 +392,8 @@ class PieceTree(
 
             travNode = travNode.next
         }
+
+        require(totalTextLen == myTextLength) { "Text len does not match!" }
 
         return resBuilder.toString()
     }
