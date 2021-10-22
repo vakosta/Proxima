@@ -1,6 +1,5 @@
 package ru.hse.hseditor.domain.app.locks
 
-import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -26,8 +25,8 @@ internal object LocksGate {
      * Acquires a write action lock once all read actions cease to execute and returns a list of
      * interrupted read actions that must be resumed after the write action is done.
      */
-    suspend fun acquireWriteActionLock(writeAction: WriteAction): List<InterruptableReadAction<*>> {
-        val interruptedActions = mutableListOf<InterruptableReadAction<*>>()
+    suspend fun acquireWriteActionLock(writeAction: WriteAction): List<InterruptableReadAction> {
+        val interruptedActions = mutableListOf<InterruptableReadAction>()
 
         myDispatchMutex.withLock {
             myOngoingWriteAction?.join()

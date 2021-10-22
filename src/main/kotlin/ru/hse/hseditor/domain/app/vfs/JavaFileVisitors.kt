@@ -1,16 +1,19 @@
 package ru.hse.hseditor.domain.app.vfs
 
-import org.jetbrains.kotlin.fir.resolve.dfa.stackOf
-import org.jetbrains.kotlin.fir.resolve.dfa.topOrNull
 import java.io.IOException
-import java.nio.file.*
+import java.nio.file.FileVisitResult
+import java.nio.file.FileVisitor
+import java.nio.file.Path
+import java.nio.file.StandardWatchEventKinds
+import java.nio.file.WatchService
 import java.nio.file.attribute.BasicFileAttributes
+import java.util.Stack
 
 internal class MountVFSFileVisitor(
     private val myWatcher: WatchService,
     private val myVsfStub: OsVirtualFileSystem
 ) : FileVisitor<Path> {
-    private val myDirectoryStack = stackOf<OsVirtualDirectory>()
+    private val myDirectoryStack = Stack<OsVirtualDirectory>()
 
     private var myRoot: OsVirtualDirectory? = null
     val root: OsVirtualDirectory get() = myRoot ?: throw IllegalStateException("Walk was not started!")
@@ -24,10 +27,10 @@ internal class MountVFSFileVisitor(
 
         lateinit var vDir: OsVirtualDirectory
         if (myRoot == null) {
-            vDir = OsVirtualDirectory(myDirectoryStack.topOrNull(), dir.relativize(dir), myVsfStub)
+            vDir = OsVirtualDirectory(myDirectoryStack.firstOrNull(), dir.relativize(dir), myVsfStub)
             myRoot = vDir
         } else {
-            vDir = OsVirtualDirectory(myDirectoryStack.top(), root.path.relativize(dir), myVsfStub)
+            vDir = OsVirtualDirectory(myDirectoryStack.first(), root.path.relativize(dir), myVsfStub)
         }
 
         myDirectoryStack.push(vDir)
@@ -47,17 +50,17 @@ internal class MountVFSFileVisitor(
         require(attrs != null) { "Null file attributes encountered while mounting a directory!" }
 
         if (attrs.isSymbolicLink) {
-            myDirectoryStack.top().mutChildren.add(
+            myDirectoryStack.first().mutChildren.add(
                 OsVirtualSymlink(
-                    myDirectoryStack.top(),
+                    myDirectoryStack.first(),
                     root.path.relativize(file),
                     myVsfStub
                 )
             )
         } else if (attrs.isRegularFile) {
-            myDirectoryStack.top().mutChildren.add(
+            myDirectoryStack.first().mutChildren.add(
                 OsVirtualFile(
-                    myDirectoryStack.top(),
+                    myDirectoryStack.first(),
                     root.path.relativize(file),
                     myVsfStub
                 )

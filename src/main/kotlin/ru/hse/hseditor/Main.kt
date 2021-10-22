@@ -18,8 +18,7 @@ fun main() = application {
             fileSystemModule,
         )
     }
-
     val mainWindowLifetime = defineLifetime("MainWindow Lifetime")
-    val state = MainWindowState(mainWindowLifetime)
+    val state = MainWindowState(mainWindowLifetime.lifetime)
     MainWindow(state)
 }
