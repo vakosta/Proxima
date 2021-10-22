@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -26,6 +28,9 @@ fun CodeView(
     onGloballyPositioned: (onGloballyPositioned: LayoutCoordinates) -> Unit = {},
 ) {
 
+    val width = rememberSaveable { mutableStateOf(1) }
+    val height = rememberSaveable { mutableStateOf(1) }
+
     if (isVisible) {
         Image(
             bitmap = code,
@@ -34,7 +39,14 @@ fun CodeView(
             alignment = Alignment.TopStart,
             modifier = Modifier
                 .fillMaxSize()
-                .onGloballyPositioned { onGloballyPositioned(it) },
+                .onGloballyPositioned {
+                    if (it.size.width != width.value || it.size.height != height.value) {
+                        width.value = it.size.width
+                        height.value = it.size.height
+                        onGloballyPositioned(it)
+                        println(height.value)
+                    }
+                },
         )
     } else {
         Column(
