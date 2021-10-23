@@ -38,6 +38,7 @@ import kotlin.system.exitProcess
 
 @Composable
 fun MainWindow(state: MainWindowState) = Window(
+    title = "HSEditor",
     state = state,
     onCloseRequest = { exitProcess(0) /* TODO some other handling obv required */ },
     onKeyEvent = { state.onKeyEvent(it) }
