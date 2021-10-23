@@ -82,7 +82,10 @@ class MainWindowState(
     }
 
     fun onKeyEvent(keyEvent: KeyEvent): Boolean {
-        activeEditorState?.onKeyEvent(keyEvent) ?: return false
+        val isKeyPassed = activeEditorState?.onKeyEvent(keyEvent)
+        if (isKeyPassed == null || !isKeyPassed) {
+            return false
+        }
         typingTime = Instant.now()
         isShowCarriage = true
         updateRenderedContent()

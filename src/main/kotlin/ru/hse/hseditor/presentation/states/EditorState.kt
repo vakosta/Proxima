@@ -18,8 +18,9 @@ class EditorState(
     fun onKeyEvent(keyEvent: KeyEvent): Boolean {
         if (keyEvent.isRelevant()) {
             handleKeyEvent(keyEvent)
+            return true
         }
-        return true
+        return false
     }
 
     private fun handleKeyEvent(keyEvent: KeyEvent) {
