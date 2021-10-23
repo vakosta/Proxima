@@ -8,8 +8,9 @@ import org.jetbrains.skija.Paint
 import org.jetbrains.skija.Surface
 import org.jetbrains.skija.TextLine
 import org.jetbrains.skija.Typeface
-import ru.hse.hseditor.domain.color.ColorService
+import org.koin.core.component.KoinComponent
 import ru.hse.hseditor.domain.common.COLOR_BLACK
+import ru.hse.hseditor.domain.highlights.TextState
 
 class SkijaBuilder(
     private val content: String,
@@ -17,12 +18,8 @@ class SkijaBuilder(
     private val isShowCarriage: Boolean,
     width: Int,
     height: Int,
-) {
-
-    private val colorService: ColorService = ColorService(
-        content,
-        ColorService.Language.Kotlin,
-    )
+    private val textState: TextState? = null,
+) : KoinComponent {
 
     private val surface: Surface = Surface.makeRasterN32Premul(width, height)
     private val paint: Paint = Paint()
@@ -66,7 +63,7 @@ class SkijaBuilder(
         canvas: Canvas,
         paint: Paint,
     ) {
-        paint.color = colorService.getCharColor(charPosition)
+        paint.color = textState?.getCharColor(charPosition) ?: COLOR_BLACK
         val textLine = TextLine.make(c.toString(), font)
         canvas.drawTextLine(textLine, x, y, paint)
         x += (textLine.width + 1).toInt()

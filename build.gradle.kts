@@ -13,6 +13,7 @@ version = "1.0"
 
 val koinVersion = "3.1.2"
 val antlrVersion = "4.9.2"
+val intervalTreeVersion = "1.0.0"
 
 repositories {
     google()
@@ -24,6 +25,7 @@ dependencies {
     implementation(compose.desktop.currentOs)
     implementation(kotlin("stdlib-jdk8"))
     implementation("io.insert-koin:koin-core:$koinVersion")
+    implementation("com.lodborg:interval-tree:$intervalTreeVersion")
 
     antlr("org.antlr:antlr4-runtime:$antlrVersion")
     antlr("org.antlr:antlr4-maven-plugin:$antlrVersion")
