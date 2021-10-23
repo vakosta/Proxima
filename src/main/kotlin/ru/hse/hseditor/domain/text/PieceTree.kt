@@ -835,7 +835,7 @@ class PieceTree(
                         prevLineStartOffset + travColNo - 1
                     )
                 } else {
-                    travColNo -= travNode.piece.textLen - prevLineStartOffset;
+                    travColNo -= travNode.piece.textLen - prevLineStartOffset
                     break
                 }
             } else {
@@ -864,7 +864,7 @@ class PieceTree(
                         travColNo - 1
                     )
                 } else {
-                    travColNo -= travNode.piece.textLen;
+                    travColNo -= travNode.piece.textLen
                 }
             }
 

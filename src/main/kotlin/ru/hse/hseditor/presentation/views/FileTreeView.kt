@@ -32,7 +32,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import ru.hse.hseditor.presentation.states.FileTree
+import ru.hse.hseditor.presentation.states.FileTreeViewModel
 import ru.hse.hseditor.presentation.utils.pointerMoveFilter
 import ru.hse.hseditor.presentation.utils.withoutWidthConstraints
 import ru.hse.hseditor.presentation.views.common.VerticalScrollbar
@@ -53,7 +53,7 @@ fun FileTreeViewTabView() = Surface {
 }
 
 @Composable
-fun FileTreeView(model: FileTree) = Surface(
+fun FileTreeView(model: FileTreeViewModel) = Surface(
     modifier = Modifier.fillMaxSize()
 ) {
     with(LocalDensity.current) {
@@ -80,7 +80,7 @@ fun FileTreeView(model: FileTree) = Surface(
 }
 
 @Composable
-private fun FileTreeItemView(fontSize: TextUnit, height: Dp, model: FileTree.Item) = Row(
+private fun FileTreeItemView(fontSize: TextUnit, height: Dp, model: FileTreeViewModel.Item) = Row(
     modifier = Modifier
         .wrapContentHeight()
         .clickable { model.open() }
@@ -116,9 +116,9 @@ private fun FileTreeItemView(fontSize: TextUnit, height: Dp, model: FileTree.Ite
 }
 
 @Composable
-private fun FileItemIcon(modifier: Modifier, model: FileTree.Item) = Box(modifier.size(24.dp).padding(4.dp)) {
+private fun FileItemIcon(modifier: Modifier, model: FileTreeViewModel.Item) = Box(modifier.size(24.dp).padding(4.dp)) {
     when (val type = model.type) {
-        is FileTree.ItemType.Folder -> when {
+        is FileTreeViewModel.ItemType.Folder -> when {
             !type.canExpand -> Unit
             type.isExpanded -> Icon(
                 Icons.Default.KeyboardArrowDown, contentDescription = null, tint = LocalContentColor.current
@@ -127,7 +127,7 @@ private fun FileItemIcon(modifier: Modifier, model: FileTree.Item) = Box(modifie
                 Icons.Default.KeyboardArrowRight, contentDescription = null, tint = LocalContentColor.current
             )
         }
-        is FileTree.ItemType.File -> when (type.ext) {
+        is FileTreeViewModel.ItemType.File -> when (type.ext) {
             else -> Icon(Icons.Default.AccountBox, contentDescription = null, tint = Color(0xFF3E86A0))
         }
     }

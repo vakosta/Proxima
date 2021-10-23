@@ -1,4 +1,4 @@
-package ru.hse.hseditor.domain.app.vfs
+package ru.hse.hseditor.domain.common.vfs
 
 import ru.hse.hseditor.domain.text.FileChunk
 import ru.hse.hseditor.domain.text.PREFERRED_PIECE_TREE_CHUNK_SIZE
@@ -8,7 +8,6 @@ import ru.hse.hseditor.domain.text.document.DocumentSource
 import ru.hse.hseditor.domain.text.document.PieceTreeDocument
 import ru.hse.hseditor.domain.text.file.getLineStartOffsetsList
 import java.nio.charset.Charset
-import java.nio.file.OpenOption
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
 import kotlin.io.path.bufferedReader
@@ -34,8 +33,9 @@ private fun fetchFileChunksSequence(absolutePath: Path) = sequence {
 
     absolutePath.bufferedReader().use {
         while (it.ready()) {
+            // TODO @thisisvolatile it does 3 copies, and i dunno how to fix it.
             readCharsNum = it.read(charArr)
-            val str = String(charArr)
+            val str = buildString { append(charArr, 0, readCharsNum) }
             yield(FileChunk(str, str.getLineStartOffsetsList()))
             if (readCharsNum < PREFERRED_PIECE_TREE_CHUNK_SIZE) break
         }
@@ -63,7 +63,7 @@ class OsVirtualFile(
         // TODO file indexing, so... no diffs, many excess calculations!
         // TODO this need testing...
         fileSystem.absoluteRootPath.resolve(path).writeLines(
-            myDocument.fetchLinesSequence(1..myDocument.lineCount),
+            myDocument.lines(1..myDocument.lineCount),
             Charset.defaultCharset(),
             StandardOpenOption.TRUNCATE_EXISTING
         )

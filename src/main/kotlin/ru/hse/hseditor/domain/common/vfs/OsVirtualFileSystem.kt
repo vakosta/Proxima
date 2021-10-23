@@ -1,8 +1,9 @@
-package ru.hse.hseditor.domain.app.vfs
+package ru.hse.hseditor.domain.common.vfs
 
-import ru.hse.hseditor.domain.app.lifetimes.Lifetime
-import ru.hse.hseditor.domain.app.lifetimes.defineChildLifetime
+import ru.hse.hseditor.domain.common.lifetimes.Lifetime
+import ru.hse.hseditor.domain.common.lifetimes.defineChildLifetime
 import java.nio.file.*
+import java.util.logging.Logger
 import kotlin.concurrent.thread
 import kotlin.io.path.isDirectory
 
@@ -37,7 +38,7 @@ fun mountVFSAtPathLifetimed(
         throw visitor.exception!! // mamoy klyanus'!!
     }
 
-    vfsStub.root = visitor.root
+    vfsStub.internalRoot = visitor.root
     watcherDescriptor.startWatching()
     // If we are here with no exceptions, it is no longer a stub!
     return vfsStub
@@ -64,12 +65,31 @@ internal class WatcherDescriptor(val lifetime: Lifetime, val watcher: WatchServi
         }
     }
 
-    private fun processEvent(event: WatchEvent<*>) = when (event.kind()) {
-        StandardWatchEventKinds.ENTRY_CREATE -> {}
-        StandardWatchEventKinds.ENTRY_DELETE -> {}
-        StandardWatchEventKinds.ENTRY_MODIFY -> {}
-        StandardWatchEventKinds.OVERFLOW -> {}
-        else -> {}
+    private fun processEvent(event: WatchEvent<*>) {
+        when (event.kind()) {
+            StandardWatchEventKinds.ENTRY_CREATE -> {
+                val context = event.context()
+                if (context !is Path) return
+
+                LOG.info(context.toString())
+            }
+            StandardWatchEventKinds.ENTRY_DELETE -> {
+                // Remove from vfs, signal update to frontend
+            }
+            StandardWatchEventKinds.ENTRY_MODIFY -> {
+                // If not opened, do nothing, if opened, execute the events
+            }
+            StandardWatchEventKinds.OVERFLOW -> {
+                // Log.warn
+            }
+            else -> {
+                // Log.Warn
+            }
+        }
+    }
+
+    companion object {
+        val LOG = Logger.getLogger(OsVirtualFileSystem::class.java.name)
     }
 }
 
@@ -81,16 +101,17 @@ class OsVirtualFileSystem internal constructor(
     private val myWatcherDescriptor: WatcherDescriptor,
     val absoluteRootPath: Path
 ) {
-    lateinit var root: OsVirtualDirectory
+    internal lateinit var internalRoot: OsVirtualDirectory
+    val root get() = internalRoot
 
     fun resolveFileAbsoluteOrNull(path: Path): OsVirtualFile? {
         require(path.isAbsolute) { "Path wasn't absolute!" }
-        require(path.startsWith(root.path)) { "Path is outside the root of the VFS!" }
+        require(path.startsWith(internalRoot.path)) { "Path is outside the root of the VFS!" }
 
-        return resolveFileRelativeOrNull(root.path.relativize(path))
+        return resolveFileRelativeOrNull(internalRoot.path.relativize(path))
     }
 
-    fun resolveFileRelativeOrNull(path: Path) = resolveFileRelativeOrNullRec(root, path) as? OsVirtualFile
+    fun resolveFileRelativeOrNull(path: Path) = resolveFileRelativeOrNullRec(internalRoot, path) as? OsVirtualFile
 }
 
 private fun resolveFileRelativeOrNullRec(osNode: OsVFSNode, path: Path): OsVFSNode? {

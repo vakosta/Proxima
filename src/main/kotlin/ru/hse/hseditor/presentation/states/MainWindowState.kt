@@ -11,26 +11,20 @@ import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.WindowSize
 import androidx.compose.ui.window.WindowState
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.MainScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.withContext
 import org.koin.core.component.KoinComponent
-import org.koin.core.component.inject
-import ru.hse.hseditor.domain.app.lifetimes.Lifetime
-import ru.hse.hseditor.domain.app.lifetimes.defineChildLifetime
-import ru.hse.hseditor.domain.app.locks.runBlockingWrite
-import ru.hse.hseditor.domain.app.tickerFlow
-import ru.hse.hseditor.domain.filesystem.FileSystemManager
+import ru.hse.hseditor.domain.common.lifetimes.Lifetime
+import ru.hse.hseditor.domain.common.lifetimes.defineChildLifetime
+import ru.hse.hseditor.domain.common.locks.runBlockingWrite
+import ru.hse.hseditor.domain.common.vfs.mountVFSAtPathLifetimed
+import ru.hse.hseditor.domain.highlights.TextState
 import ru.hse.hseditor.domain.skija.SkijaBuilder
-import ru.hse.hseditor.presentation.model.File
-import java.time.Duration
+import ru.hse.hseditor.domain.text.document.DocumentSource
+import ru.hse.hseditor.presentation.model.FileModel
+import ru.hse.hseditor.presentation.model.toFileModel
+import java.nio.file.Paths
 import java.time.Instant
 import java.util.logging.Logger
-import kotlin.concurrent.thread
+import kotlin.io.path.absolute
 
 class MainWindowState(
     private val myLifetime: Lifetime,
@@ -40,14 +34,18 @@ class MainWindowState(
     override var size: WindowSize = WindowSize(800.dp, 600.dp),
 ) : KoinComponent, WindowState {
 
-    private val fileSystemManager: FileSystemManager by inject()
+//    private val fileSystemManager: FileSystemManager by inject()
 
     var renderedContent: ImageBitmap by mutableStateOf(
         SkijaBuilder("", 0, true, 300, 300).buildView()
     )
 
     val panelState: PanelState by mutableStateOf(PanelState())
-    val fileTreeState: FileTree = FileTree(fileSystemManager.getBaseDirectory(), this::openEditor)
+    val fileTreeState: FileTreeViewModel = FileTreeViewModel(
+        // TODO this need to be an option on the menu
+        mountVFSAtPathLifetimed(myLifetime, Paths.get("").absolute()).root.toFileModel(),
+        this::openEditor
+    )
     val editorStates: MutableList<EditorState> = mutableStateListOf()
     var activeEditorState: EditorState?
         get() = editorStates.firstOrNull { it.isActive }
@@ -76,14 +74,24 @@ class MainWindowState(
         updateRenderedContent()
     }
 
-    fun openEditor(file: File) {
+    private fun openEditor(file: FileModel) {
+        if (file.vfsNode !is DocumentSource) return // TODO show modal
+
+        val pieceTreeTextBuffer = file.vfsNode.makeDocument()
+
         val childLifetimeDef = defineChildLifetime(myLifetime, "${file.name} editor lifetime.")
         val editorState = EditorState(
-            childLifetimeDef.lifetime,
+            myLifetime = childLifetimeDef.lifetime,
             fileName = file.name,
             isActive = false,
+            textState = TextState(
+                myLifetime = childLifetimeDef.lifetime,
+                language = TextState.Language.Kotlin,
+                document = file.vfsNode.makeDocument(), // TODO async read
+            )
         )
         editorStates.add(editorState)
+
         activeEditorState = editorState
     }
 
@@ -104,16 +112,12 @@ class MainWindowState(
         return true
     }
 
-    companion object {
-        val LOG = Logger.getLogger(MainWindowState::class.java.name)
-    }
-
     fun updateRenderedContent(width: Int = renderedContent.width, height: Int = renderedContent.height) {
         // TODO: Start at EditorRange() and end at EditorRange(), will be faster
         val editor = activeEditorState ?: return
         runBlockingWrite {
             renderedContent = SkijaBuilder(
-                content = editor.textState.pieceTree.getLinesRawContent(),
+                content = editor.textState.document.getRawContent(),
                 carriagePosition = editor.textState.carriageAbsoluteOffset,
                 isShowCarriage = isShowCarriage,
                 width = width,
@@ -121,5 +125,9 @@ class MainWindowState(
                 textState = editor.textState,
             ).buildView()
         }
+    }
+
+    companion object {
+        val LOG = Logger.getLogger(MainWindowState::class.java.name)
     }
 }

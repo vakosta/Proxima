@@ -1,4 +1,4 @@
-package ru.hse.hseditor.domain.app.lifetimes
+package ru.hse.hseditor.domain.common.lifetimes
 
 import kotlinx.coroutines.*
 

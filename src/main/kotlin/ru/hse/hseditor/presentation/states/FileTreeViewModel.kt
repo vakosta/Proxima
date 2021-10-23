@@ -3,10 +3,10 @@ package ru.hse.hseditor.presentation.states
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import ru.hse.hseditor.presentation.model.File
+import ru.hse.hseditor.presentation.model.FileModel
 
 class ExpandableFile(
-    val file: File,
+    val file: FileModel,
     val level: Int,
 ) {
     var children: List<ExpandableFile> by mutableStateOf(emptyList())
@@ -24,10 +24,11 @@ class ExpandableFile(
     }
 }
 
-class FileTree(root: File, val openFile: (file: File) -> Unit) {
-    private val expandableRoot = ExpandableFile(root, 0)/*.apply {
-        toggleExpanded()
-    }*/
+class FileTreeViewModel(
+    val root: FileModel,
+    val openFile: (file: FileModel) -> Unit
+) {
+    private val expandableRoot = ExpandableFile(root, 0).apply { toggleExpanded() }
 
     val items: List<Item> get() = expandableRoot.toItems()
 

@@ -5,15 +5,15 @@ import com.lodborg.intervaltree.Interval
 import com.lodborg.intervaltree.IntervalTree
 import ru.hse.hseditor.data.CharParameters
 import ru.hse.hseditor.data.HighlightInterval
-import ru.hse.hseditor.domain.app.lifetimes.Lifetime
-import ru.hse.hseditor.domain.app.locks.runBackgroundRead
-import ru.hse.hseditor.domain.app.locks.runBlockingRead
+import ru.hse.hseditor.domain.common.lifetimes.Lifetime
+import ru.hse.hseditor.domain.common.locks.runBlockingRead
 import ru.hse.hseditor.domain.common.COLOR_BLACK
 import ru.hse.hseditor.domain.common.TOKEN_COLORS
 import ru.hse.hseditor.domain.highlights.syntaxmanager.KotlinSyntaxManager
 import ru.hse.hseditor.domain.highlights.syntaxmanager.SyntaxManager
 import ru.hse.hseditor.domain.text.PieceTree
 import ru.hse.hseditor.domain.text.PieceTreeBuilder
+import ru.hse.hseditor.domain.text.document.Document
 import java.util.logging.Level
 import java.util.logging.Logger
 import kotlin.math.max
@@ -21,15 +21,14 @@ import kotlin.math.min
 
 class TextState(
     private val myLifetime: Lifetime,
-    val text: String,
     val language: Language,
-    val pieceTree: PieceTree = PieceTreeBuilder().build(),
+    val document: Document,
     val highlights: IntervalTree<Int> = IntervalTree<Int>(),
 ) {
 
     private val currentLine: String
         get() {
-            val output = pieceTree.getLineContent(carriageLine + 1)
+            val output = document.getLineContent(carriageLine + 1)
             return try {
                 output.substring(0, output.indexOfFirst { it == '\n' })
             } catch (e: StringIndexOutOfBoundsException) {
@@ -68,8 +67,8 @@ class TextState(
     }
 
     fun onPressedRightArrow() {
-        carriageAbsoluteOffset = min(carriageAbsoluteOffset + 1, pieceTree.textLength)
-        if (carriageLineOffset == currentLine.length && carriageLine < pieceTree.lineCount - 1) {
+        carriageAbsoluteOffset = min(carriageAbsoluteOffset + 1, document.textLength)
+        if (carriageLineOffset == currentLine.length && carriageLine < document.lineCount - 1) {
             carriageLine++
             carriageLineOffset = 0
         } else if (carriageLineOffset != currentLine.length) {
@@ -79,13 +78,13 @@ class TextState(
     }
 
     fun onPressedBackspace() {
-        pieceTree.deleteAfter(carriageAbsoluteOffset - 1)
+        document.deleteCharAfter(carriageAbsoluteOffset - 1)
         updateCurrentLineHighlights(-1)
         onPressedLeftArrow()
     }
 
     fun onTypedChar(char: Char) {
-        pieceTree.insert(char.toString(), carriageAbsoluteOffset, true)
+        document.insert(char.toString(), carriageAbsoluteOffset)
         updateCurrentLineHighlights(1)
         onPressedRightArrow()
     }

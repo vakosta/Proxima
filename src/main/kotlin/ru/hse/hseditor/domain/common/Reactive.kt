@@ -1,10 +1,9 @@
-package ru.hse.hseditor.domain.app
+package ru.hse.hseditor.domain.common
 
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flow
-import ru.hse.hseditor.domain.app.lifetimes.Lifetime
+import ru.hse.hseditor.domain.common.lifetimes.Lifetime
 
 // TODO @thisisvolatile Reactive threading?
 

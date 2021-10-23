@@ -5,7 +5,7 @@ import androidx.compose.ui.input.key.utf16CodePoint
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import org.koin.core.parameter.parametersOf
-import ru.hse.hseditor.domain.app.lifetimes.Lifetime
+import ru.hse.hseditor.domain.common.lifetimes.Lifetime
 import ru.hse.hseditor.domain.highlights.TextState
 import ru.hse.hseditor.presentation.utils.isRelevant
 
@@ -13,9 +13,8 @@ class EditorState(
     private val myLifetime: Lifetime,
     var fileName: String,
     var isActive: Boolean = false,
+    val textState: TextState
 ) : KoinComponent {
-
-    val textState: TextState by inject { parametersOf(myLifetime, "", TextState.Language.Kotlin) }
 
     fun onKeyEvent(keyEvent: KeyEvent): Boolean {
         if (keyEvent.isRelevant()) {
@@ -26,14 +25,10 @@ class EditorState(
 
     private fun handleKeyEvent(keyEvent: KeyEvent) {
         when (keyEvent.nativeKeyEvent.keyCode) {
-            8 ->
-                textState.onPressedBackspace()
-            37 ->
-                textState.onPressedLeftArrow()
-            39 ->
-                textState.onPressedRightArrow()
-            else ->
-                textState.onTypedChar(keyEvent.utf16CodePoint.toChar())
+            8 -> textState.onPressedBackspace()
+            37 -> textState.onPressedLeftArrow()
+            39 -> textState.onPressedRightArrow()
+            else -> textState.onTypedChar(keyEvent.utf16CodePoint.toChar())
         }
     }
 }

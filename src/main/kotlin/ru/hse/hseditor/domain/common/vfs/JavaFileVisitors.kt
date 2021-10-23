@@ -1,20 +1,14 @@
-package ru.hse.hseditor.domain.app.vfs
+package ru.hse.hseditor.domain.common.vfs
 
 import java.io.IOException
-import java.nio.file.FileVisitResult
-import java.nio.file.FileVisitor
-import java.nio.file.Path
-import java.nio.file.StandardWatchEventKinds
-import java.nio.file.WatchService
+import java.nio.file.*
 import java.nio.file.attribute.BasicFileAttributes
-import java.util.Stack
+import java.util.logging.Logger
 
 internal class MountVFSFileVisitor(
     private val myWatcher: WatchService,
     private val myVsfStub: OsVirtualFileSystem
 ) : FileVisitor<Path> {
-    private val myDirectoryStack = Stack<OsVirtualDirectory>()
-
     private var myRoot: OsVirtualDirectory? = null
     val root: OsVirtualDirectory get() = myRoot ?: throw IllegalStateException("Walk was not started!")
 
@@ -25,16 +19,15 @@ internal class MountVFSFileVisitor(
         require(dir != null) { "Null file encountered while mounting a directory!" }
         require(attrs != null) { "Null file attributes encountered while mounting a directory!" }
 
-        lateinit var vDir: OsVirtualDirectory
-        if (myRoot == null) {
-            vDir = OsVirtualDirectory(myDirectoryStack.firstOrNull(), dir.relativize(dir), myVsfStub)
-            myRoot = vDir
-        } else {
-            vDir = OsVirtualDirectory(myDirectoryStack.first(), root.path.relativize(dir), myVsfStub)
+        if (myRoot != null) {
+            val subDirectoryVisitor = MountVFSFileVisitor(myWatcher, myVsfStub)
+            Files.walkFileTree(dir, subDirectoryVisitor)
+            root.mutChildren.add(subDirectoryVisitor.root)
+
+            return FileVisitResult.SKIP_SUBTREE
         }
 
-        myDirectoryStack.push(vDir)
-
+        myRoot = OsVirtualDirectory(null, dir, myVsfStub)
         dir.register(
             myWatcher,
             StandardWatchEventKinds.ENTRY_CREATE,
@@ -50,23 +43,23 @@ internal class MountVFSFileVisitor(
         require(attrs != null) { "Null file attributes encountered while mounting a directory!" }
 
         if (attrs.isSymbolicLink) {
-            myDirectoryStack.first().mutChildren.add(
+            root.mutChildren.add(
                 OsVirtualSymlink(
-                    myDirectoryStack.first(),
+                    root,
                     root.path.relativize(file),
                     myVsfStub
                 )
             )
         } else if (attrs.isRegularFile) {
-            myDirectoryStack.first().mutChildren.add(
+            root.mutChildren.add(
                 OsVirtualFile(
-                    myDirectoryStack.first(),
+                    root,
                     root.path.relativize(file),
                     myVsfStub
                 )
             )
         } else {
-            // Warn?
+            LOG.warning("Found a leaf that is neither symlink nor file.")
         }
 
         return FileVisitResult.CONTINUE
@@ -87,8 +80,10 @@ internal class MountVFSFileVisitor(
             return FileVisitResult.TERMINATE
         }
 
-        myDirectoryStack.pop()
-
         return FileVisitResult.CONTINUE
+    }
+
+    companion object {
+        val LOG = Logger.getLogger(MountVFSFileVisitor::class.java.name)
     }
 }

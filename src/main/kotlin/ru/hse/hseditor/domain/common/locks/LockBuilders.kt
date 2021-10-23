@@ -1,8 +1,8 @@
-package ru.hse.hseditor.domain.app.locks
+package ru.hse.hseditor.domain.common.locks
 
 import kotlinx.coroutines.runBlocking
-import ru.hse.hseditor.domain.app.lifetimes.Lifetime
-import ru.hse.hseditor.domain.app.exceptions.ActionNotExecutedException
+import ru.hse.hseditor.domain.common.lifetimes.Lifetime
+import ru.hse.hseditor.domain.common.exceptions.ActionNotExecutedException
 
 fun <T> runBlockingRead(block: () -> T, canExecuteBlock: (() -> Boolean)? = null): T {
     val readAction = object : ReadAction<T>() {
@@ -20,6 +20,7 @@ fun <T> runBlockingRead(block: () -> T, canExecuteBlock: (() -> Boolean)? = null
         LocksGate.acquireReadActionLock(readAction)
 
         readAction.execute()
+        LocksGate.letGoReadActionLock(readAction)
         readAction.collectResult()
     }
 }
@@ -41,6 +42,7 @@ fun runBlockingWrite(block: () -> Unit, canExecuteBlock: (() -> Boolean)? = null
         for (action in interruptedActions) {
             action.lifetime.scopedLaunch { action.execute() }
         }
+        LocksGate.letGoWriteActionLock(writeAction)
     }
 }
 
@@ -61,6 +63,7 @@ fun Lifetime.runBackgroundRead(block: () -> Unit, canExecuteBlock: (() -> Boolea
     scopedLaunch {
         LocksGate.acquireReadActionLock(readAction)
         readAction.execute()
+        LocksGate.letGoReadActionLock(readAction)
     }
 }
 
