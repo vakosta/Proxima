@@ -137,4 +137,13 @@ class PieceTreeTest {
         pieceTree.deleteAfter(6)
         assertEquals("val ke = 123", pieceTree.getLinesRawContent())
     }
+
+    @Test
+    fun `the kot example (newlines) works`() {
+        val pieceTree = PieceTreeBuilder().build()
+
+        val str = "val kot = 123\nval kot = 123\nval kot = 123\nval kot = 123\n"
+        pieceTree.addCharByCharAndAssertWithPrefix(str, 0)
+        assertEquals(str, pieceTree.getLinesRawContent())
+    }
 }

@@ -33,18 +33,27 @@ dependencies {
 //    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5:1.5.21")
     testImplementation("io.insert-koin:koin-test:$koinVersion")
     testImplementation("io.insert-koin:koin-test-junit5:$koinVersion")
-
 }
 
-tasks.test {
-    useJUnitPlatform()
-}
+tasks {
+    test {
+        useJUnit()
+    }
 
-tasks.withType<KotlinCompile> {
-    kotlinOptions {
-        languageVersion = "1.5"
-        apiVersion = "1.5"
-        jvmTarget = "11"
+    generateGrammarSource {
+        maxHeapSize = "64m"
+        arguments = arguments + listOf("-visitor", "-long-messages")
+        arguments = arguments + listOf("-package", "ru.hse.hseditor.antlr")
+        outputDirectory = File("$buildDir/generated-src/antlr/main/ru/hse/hseditor/antlr")
+    }
+
+    withType<KotlinCompile> {
+        dependsOn(generateGrammarSource)
+        kotlinOptions {
+            languageVersion = "1.5"
+            apiVersion = "1.5"
+            jvmTarget = "11"
+        }
     }
 }
 
@@ -57,11 +66,4 @@ compose.desktop {
             packageVersion = "1.0.0"
         }
     }
-}
-
-tasks.generateGrammarSource {
-    maxHeapSize = "64m"
-    arguments = arguments + listOf("-visitor", "-long-messages")
-    arguments = arguments + listOf("-package", "ru.hse.hseditor.antlr")
-    outputDirectory = File("$buildDir/generated-src/antlr/main/ru/hse/hseditor/antlr")
 }

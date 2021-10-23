@@ -2,6 +2,7 @@ package ru.hse.hseditor.domain.text
 
 import ru.hse.hseditor.domain.text.document.EditorRange
 import ru.hse.hseditor.domain.text.file.getLineStartOffsetsList
+import java.util.logging.Logger
 
 // TODO @thisisvolatile maybe do a refactoring of the internal API?
 // TODO Fix max modifiable chars?
@@ -83,7 +84,11 @@ internal data class Piece(
     val chunkEndPos: ChunkLFOffset,
     val lineFeeds: Int,
     val textLen: Int
-)
+) {
+    fun requireValid() {
+        require(chunkDesc.bufferIndex >= 1)
+    }
+}
 
 //endregion
 
@@ -240,6 +245,7 @@ internal class PieceTreeSearchCache(
     fun validate(offset: Int) {
         val tmp = mutableListOf<PieceTreeSearchCacheEntry>()
         for (i in myCache.indices) {
+            LOG.info("VALIDATE iteration")
             val entry = myCache[i]
             if (entry.nodeStartOffset < offset) {
                 tmp.add(entry)
@@ -247,6 +253,10 @@ internal class PieceTreeSearchCache(
         }
 
         myCache = tmp
+    }
+
+    companion object {
+        val LOG = Logger.getLogger(PieceTreeSearchCache::class.java.name)
     }
 }
 
@@ -379,10 +389,15 @@ class PieceTree(
     fun getLinesRawContent(): String {
         val resBuilder = StringBuilder()
 
+        if (myRoot == SENTINEL) return ""
+
         var travNode = myRoot.leftmostChild
+        require(travNode != SENTINEL) { "Trav node is sentinel!" }
         var totalTextLen = 0
 
-        while (totalTextLen != myTextLength) {
+        LOG.info("Getting lines raw content!")
+
+        while (totalTextLen < myTextLength) {
             val chunk = lookupChunkByDescriptor(travNode.piece.chunkDesc)
             val startOffset = getOffsetInChunk(travNode.piece.chunkDesc, travNode.piece.chunkStartPos)
 
@@ -394,6 +409,7 @@ class PieceTree(
 
         require(totalTextLen == myTextLength) { "Text len does not match!" }
 
+        LOG.info("Done getting lines raw content!")
         return resBuilder.toString()
     }
 
@@ -417,13 +433,15 @@ class PieceTree(
         val cacheEntry = mySearchCache.getEntryByLineNumber(lineNo)
         // If the cache lookup is successful, figure out how to return it.
         if (cacheEntry != null) {
+            require(cacheEntry.nodeStartLineNumber != null) { "nodeStartLineNumber was null" }
+
             travNode = cacheEntry.node
             val prevAccumulatedValue = travNode.getOffsetByLineStart(
-                lineNo - (cacheEntry.nodeStartLineNumber ?: 0) - 1
+                lineNo - cacheEntry.nodeStartLineNumber - 1
             )
             val chunk = lookupChunkByDescriptor(travNode.piece.chunkDesc)
             val startOffset = getOffsetInChunk(travNode.piece.chunkDesc, travNode.piece.chunkStartPos)
-            if ((cacheEntry.nodeStartLineNumber ?: 0) + travNode.piece.lineFeeds == lineNo) {
+            if (cacheEntry.nodeStartLineNumber + travNode.piece.lineFeeds == lineNo) {
                 returnBuffer.append(
                     chunk.chunkSubstring(
                         startOffset + prevAccumulatedValue,
@@ -431,7 +449,12 @@ class PieceTree(
                     )
                 )
             } else {
-                val accumulatedValue = travNode.getOffsetByLineStart(lineNo - cacheEntry.nodeStartOffset)
+                val accumulatedValue = travNode.getOffsetByLineStart(lineNo - cacheEntry.nodeStartLineNumber)
+                require(startOffset + accumulatedValue - endOffset > startOffset + prevAccumulatedValue) {
+                    "Weird offsets:\n\tstartOffset: $startOffset\n\taccumulatedValue: $accumulatedValue" +
+                            "\n\tprevAccValue: $prevAccumulatedValue\n\tendOffset: $endOffset" +
+                            "\n\tcacheEntry: $cacheEntry"
+                }
                 return chunk.chunkSubstring(
                     startOffset + prevAccumulatedValue,
                     startOffset + accumulatedValue - endOffset
@@ -525,12 +548,17 @@ class PieceTree(
         deleteAfter(beforeOffset - cnt, cnt)
     }
 
+    companion object {
+        val LOG = Logger.getLogger(Piece::class.java.name)
+    }
+
     /**
      * Deletes [cnt] chars AFTER [afterOffset].
      *
      * If [cnt] is not provided, deletes a singe character.
      */
     fun deleteAfter(afterOffset: Int, cnt: Int = 1) {
+        LOG.info("Started delete! after $afterOffset, cnt $cnt")
         myLastVisitedLineNo = 0
         myLastVisitedLineValue = ""
 
@@ -550,14 +578,21 @@ class PieceTree(
             val startSplitPos = getEditorCursorPosition(startNode.piece, startLookup.pieceOffset)
             val endSplitPos = getEditorCursorPosition(endNode.piece, endLookup.pieceOffset)
 
+            LOG.info("Deleting equal nodes!")
+
             if (startLookup.nodeStartOffset == afterOffset) {
                 if (cnt == startNode.piece.textLen) {
+                    LOG.info("Deleting start node!")
                     rbDelete(startNode)
+                    LOG.info("Recomputing text metadata!")
                     recomputeGlobalTextMetadata()
                     return
                 }
+                LOG.info("Deleting start node head!")
                 startNode.deleteHead(endSplitPos)
+                LOG.info("Validating cache!")
                 mySearchCache.validate(afterOffset)
+                LOG.info("Recomputing global metadata!")
                 recomputeGlobalTextMetadata()
                 return
             }
@@ -575,27 +610,33 @@ class PieceTree(
         }
 
         // The text we want to delete spans some nodes
+        require(startNode != endNode) { "Inconsistent delete node state!" }
+
         val nodesToDelete = mutableListOf<PieceTreeNode>()
 
         val startSplitPos = getEditorCursorPosition(startNode.piece, startLookup.pieceOffset)
         startNode.deleteTail(startSplitPos)
         mySearchCache.validate(afterOffset)
         if (startNode.piece.textLen == 0) {
+            LOG.info("Wiped start node!")
             nodesToDelete.add(startNode)
         }
 
         val endSplitPosInBuffer = getEditorCursorPosition(endNode.piece, endLookup.pieceOffset)
         endNode.deleteHead(endSplitPosInBuffer)
         if (endNode.piece.textLen == 0) {
+            LOG.info("Wiped end node!")
             nodesToDelete.add(endNode)
         }
 
         // We should delete the nodes in between
         var travNode = startNode.next
-        while (travNode != endNode) {
+        while (travNode != SENTINEL && travNode != endNode) {
             nodesToDelete.add(travNode)
             travNode = travNode.next
         }
+
+        LOG.info("Deleting nodes: $nodesToDelete")
 
         rbDelete(nodesToDelete)
         recomputeGlobalTextMetadata()
@@ -1481,6 +1522,7 @@ class PieceTree(
         var textLength = 0
 
         while (travRoot != SENTINEL) {
+            LOG.info("Recompute step...")
             lineFeedsCnt += travRoot.lineFeedsLeft + travRoot.piece.lineFeeds
             textLength += travRoot.textLenLeft + travRoot.piece.textLen
             travRoot = travRoot.right
@@ -1488,6 +1530,7 @@ class PieceTree(
 
         myLineFeedsCnt = lineFeedsCnt
         myTextLength = textLength
+        LOG.info("Cache validation...")
         mySearchCache.validate(textLength)
     }
 

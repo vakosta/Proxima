@@ -7,12 +7,16 @@ import ru.hse.hseditor.domain.app.exceptions.ActionNotExecutedException
 fun <T> runBlockingRead(block: () -> T, canExecuteBlock: (() -> Boolean)? = null): T {
     val readAction = object : ReadAction<T>() {
         var result: T? = null
-        override fun execute() { result = block() }
+        override fun execute() {
+            result = block()
+        }
+
         override fun canExecute() = if (canExecuteBlock != null) canExecuteBlock() else true
         override fun collectResult() = result ?: throw ActionNotExecutedException("Result is null!")
     }
 
     return runBlocking {
+        readAction.actionContext = coroutineContext
         LocksGate.acquireReadActionLock(readAction)
 
         readAction.execute()
@@ -26,7 +30,8 @@ fun runBlockingWrite(block: () -> Unit, canExecuteBlock: (() -> Boolean)? = null
         override fun canExecute() = if (canExecuteBlock != null) canExecuteBlock() else true
     }
 
-     runBlocking {
+    runBlocking {
+        writeAction.actionContext = coroutineContext
         val interruptedActions = LocksGate.acquireWriteActionLock(writeAction)
         writeAction.execute()
 
@@ -37,9 +42,16 @@ fun runBlockingWrite(block: () -> Unit, canExecuteBlock: (() -> Boolean)? = null
     }
 }
 
+fun runBlockingWrite(block: () -> Unit) {
+    runBlockingWrite(block, null)
+}
+
 fun Lifetime.runBackgroundRead(block: () -> Unit, canExecuteBlock: (() -> Boolean)? = null) {
     val readAction = object : ReadAction<Unit>() {
-        override fun execute() { block() }
+        override fun execute() {
+            block()
+        }
+
         override fun canExecute() = if (canExecuteBlock != null) canExecuteBlock() else true
         override fun collectResult() = Unit
     }

@@ -21,12 +21,14 @@ import kotlinx.coroutines.withContext
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import ru.hse.hseditor.domain.app.lifetimes.Lifetime
+import ru.hse.hseditor.domain.app.locks.runBlockingWrite
 import ru.hse.hseditor.domain.app.tickerFlow
 import ru.hse.hseditor.domain.filesystem.FileSystemManager
 import ru.hse.hseditor.domain.skija.SkijaBuilder
 import ru.hse.hseditor.presentation.model.File
 import java.time.Duration
 import java.time.Instant
+import java.util.logging.Logger
 import kotlin.concurrent.thread
 
 class MainWindowState(
@@ -54,12 +56,17 @@ class MainWindowState(
             updateRenderedContent()
         }
 
-    @Volatile private var typingTime = Instant.now()
-    @Volatile private var isShowCarriage = true
+    private var typingTime = Instant.now()
+    private var isShowCarriage = true
 
     init {
         // TODO extract a separete MainScope to a Lifetime
-        tickerFlow(500).onEach { /* Update render (maybe partial?) */ }.launchIn(MainScope())
+//        tickerFlow(500).onEach {
+//            if (Duration.between(typingTime, Instant.now()).seconds >= 1) {
+//                isShowCarriage = !isShowCarriage
+//                updateRenderedContent()
+//            }
+//        }.launchIn(MainScope())
     }
 
     fun setActiveEditor(editorState: EditorState) {
@@ -89,20 +96,27 @@ class MainWindowState(
         activeEditorState?.onKeyEvent(keyEvent) ?: return false
         typingTime = Instant.now()
         isShowCarriage = true
+        LOG.info("Update content from event, thread ${Thread.currentThread().id}")
         updateRenderedContent()
         return true
+    }
+
+    companion object {
+        val LOG = Logger.getLogger(MainWindowState::class.java.name)
     }
 
     fun updateRenderedContent(width: Int = renderedContent.width, height: Int = renderedContent.height) {
         // TODO: Start at EditorRange() and end at EditorRange(), will be faster
         val editor = activeEditorState ?: return
-        renderedContent = SkijaBuilder(
-            content = editor.textState.pieceTree.getLinesRawContent(),
-            carriagePosition = editor.textState.carriageAbsoluteOffset,
-            isShowCarriage = isShowCarriage,
-            width = width,
-            height = height,
-            textState = editor.textState,
-        ).buildView()
+        runBlockingWrite {
+            renderedContent = SkijaBuilder(
+                content = editor.textState.pieceTree.getLinesRawContent(),
+                carriagePosition = editor.textState.carriageAbsoluteOffset,
+                isShowCarriage = isShowCarriage,
+                width = width,
+                height = height,
+                textState = editor.textState,
+            ).buildView()
+        }
     }
 }

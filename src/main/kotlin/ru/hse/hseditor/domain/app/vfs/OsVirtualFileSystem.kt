@@ -46,7 +46,7 @@ fun mountVFSAtPathLifetimed(
 internal class WatcherDescriptor(val lifetime: Lifetime, val watcher: WatchService) {
     // Wanted to do it within a coroutine, but couldn't figure out how.
     fun startWatching() {
-        val th = thread(start = false, name = "File watcher thread", block = this::watch)
+        val th = thread(start = false, name = "File watcher thread", isDaemon = true, block = this::watch)
         lifetime.alsoOnTerminate { th.interrupt() }
         th.start()
     }
