@@ -21,6 +21,7 @@ import kotlinx.coroutines.withContext
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import ru.hse.hseditor.domain.app.lifetimes.Lifetime
+import ru.hse.hseditor.domain.app.lifetimes.defineChildLifetime
 import ru.hse.hseditor.domain.app.locks.runBlockingWrite
 import ru.hse.hseditor.domain.app.tickerFlow
 import ru.hse.hseditor.domain.filesystem.FileSystemManager
@@ -76,7 +77,9 @@ class MainWindowState(
     }
 
     fun openEditor(file: File) {
+        val childLifetimeDef = defineChildLifetime(myLifetime, "${file.name} editor lifetime.")
         val editorState = EditorState(
+            childLifetimeDef.lifetime,
             fileName = file.name,
             isActive = false,
         )

@@ -5,6 +5,9 @@ import com.lodborg.intervaltree.Interval
 import com.lodborg.intervaltree.IntervalTree
 import ru.hse.hseditor.data.CharParameters
 import ru.hse.hseditor.data.HighlightInterval
+import ru.hse.hseditor.domain.app.lifetimes.Lifetime
+import ru.hse.hseditor.domain.app.locks.runBackgroundRead
+import ru.hse.hseditor.domain.app.locks.runBlockingRead
 import ru.hse.hseditor.domain.common.COLOR_BLACK
 import ru.hse.hseditor.domain.common.TOKEN_COLORS
 import ru.hse.hseditor.domain.highlights.syntaxmanager.KotlinSyntaxManager
@@ -17,6 +20,7 @@ import kotlin.math.max
 import kotlin.math.min
 
 class TextState(
+    private val myLifetime: Lifetime,
     val text: String,
     val language: Language,
     val pieceTree: PieceTree = PieceTreeBuilder().build(),
@@ -113,7 +117,7 @@ class TextState(
         }
     }
 
-    private fun fillHighlights(text: String, offset: Int = 0) {
+    private fun fillHighlights(text: String, offset: Int = 0) = runBlockingRead {
         val tokens = syntaxManager.getTokens(text)
         for (token in tokens) {
             val highlightInterval = HighlightInterval(
@@ -124,6 +128,7 @@ class TextState(
             highlights.add(highlightInterval)
         }
     }
+
 
     fun getCharColor(position: Int): Int {
         val color: Int = getHighlights(position).firstOrNull { it.params.color != null }?.params?.color ?: COLOR_BLACK

@@ -14,14 +14,23 @@ val fileSystemModule = module {
     single { FileSystemManager() }
 }
 
-fun main() = application {
+fun main() {
     startKoin {
         modules(
             highlightsModule,
             fileSystemModule,
         )
     }
-    val mainWindowLifetime = defineLifetime("MainWindow Lifetime")
-    val state = MainWindowState(mainWindowLifetime.lifetime)
-    MainWindow(state)
+    val mainWindowLifetimeDef = defineLifetime("MainWindow Lifetime")
+
+    application {
+        val state = MainWindowState(mainWindowLifetimeDef.lifetime)
+        MainWindow(
+            state = state,
+            onCloseRequest = {
+                mainWindowLifetimeDef.terminateLifetime()
+                exitApplication()
+            }
+        )
+    }
 }

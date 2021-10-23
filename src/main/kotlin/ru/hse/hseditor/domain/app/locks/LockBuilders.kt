@@ -24,6 +24,8 @@ fun <T> runBlockingRead(block: () -> T, canExecuteBlock: (() -> Boolean)? = null
     }
 }
 
+fun <T> runBlockingRead(block: () -> T) = runBlockingRead<T>(block, null)
+
 fun runBlockingWrite(block: () -> Unit, canExecuteBlock: (() -> Boolean)? = null) {
     val writeAction = object : WriteAction() {
         override fun execute() = block()
@@ -61,6 +63,8 @@ fun Lifetime.runBackgroundRead(block: () -> Unit, canExecuteBlock: (() -> Boolea
         readAction.execute()
     }
 }
+
+fun Lifetime.runBackgroundRead(block: () -> Unit) = runBackgroundRead(block, null)
 
 fun Lifetime.runBackgroundWrite(block: () -> Unit, canExecuteBlock: (() -> Boolean)? = null) {
     val writeAction = object : WriteAction() {

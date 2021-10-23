@@ -37,9 +37,9 @@ import ru.hse.hseditor.presentation.views.Tab
 import kotlin.system.exitProcess
 
 @Composable
-fun MainWindow(state: MainWindowState) = Window(
+fun MainWindow(state: MainWindowState, onCloseRequest: () -> Unit) = Window(
     state = state,
-    onCloseRequest = { exitProcess(0) /* TODO some other handling obv required */ },
+    onCloseRequest = onCloseRequest,
     onKeyEvent = { state.onKeyEvent(it) }
 ) {
     val animatedSize = if (state.panelState.splitter.isResizing) {

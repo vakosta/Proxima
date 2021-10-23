@@ -17,6 +17,9 @@ class KotlinSyntaxManager(
         val lexer = KotlinLexer(CharStreams.fromString(text))
         val parser = KotlinParser(CommonTokenStream(lexer))
         parser.addErrorListener(SyntaxErrorListener(this@KotlinSyntaxManager::onError))
+        // TODO @thisisvolatile this should support interrupts, meaning that
+        // TODO it should have a listener that checks whether we got interrupted or not
+        // TODO every time we enter a new node.
         parser.statements()
         lexer.reset()
         return lexer.allTokens
