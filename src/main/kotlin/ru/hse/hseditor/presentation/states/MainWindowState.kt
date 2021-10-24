@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.mouse.MouseScrollUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowPosition
@@ -34,9 +35,7 @@ class MainWindowState(
 
     private val fileSystemManager: FileSystemManager by inject()
 
-    var renderedContent: ImageBitmap by mutableStateOf(
-        SkijaBuilder("", 0, true, 300, 300).buildView()
-    )
+    var renderedContent: ImageBitmap by mutableStateOf(SkijaBuilder().build())
 
     val panelState: PanelState by mutableStateOf(PanelState())
     val fileTreeState: FileTree = FileTree(fileSystemManager.getBaseDirectory(), this::openEditor)
@@ -92,16 +91,27 @@ class MainWindowState(
         return true
     }
 
+    fun onScrollEvent(mouseScrollUnit: MouseScrollUnit.Line) {
+        activeEditorState?.onVerticalOffset(mouseScrollUnit.value * 20, renderedContent.height)
+        updateRenderedContent()
+    }
+
     fun updateRenderedContent(width: Int = renderedContent.width, height: Int = renderedContent.height) {
         // TODO: Start at EditorRange() and end at EditorRange(), will be faster
         val editor = activeEditorState ?: return
-        renderedContent = SkijaBuilder(
+        editorStates.forEach { it.onVerticalOffset(0F, height) }
+        val skijaBuilder = SkijaBuilder(
             content = editor.textState.pieceTree.getLinesRawContent(),
             carriagePosition = editor.textState.carriageAbsoluteOffset,
             isShowCarriage = isShowCarriage,
+            verticalScrollOffset = editor.verticalOffset,
+            horizontalScrollOffset = editor.horizontalOffset,
             width = width,
             height = height,
             textState = editor.textState,
-        ).buildView()
+        )
+        renderedContent = skijaBuilder.build()
+        editor.maxTextX = skijaBuilder.maxTextX
+        editor.maxTextY = skijaBuilder.maxTextY
     }
 }

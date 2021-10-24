@@ -82,6 +82,7 @@ fun MainWindow(state: MainWindowState) = Window(
             CodeView(
                 isVisible = state.editorStates.isNotEmpty(),
                 code = state.renderedContent,
+                onMouseScroll = state::onScrollEvent,
                 onGloballyPositioned = {
                     state.updateRenderedContent(it.size.width, it.size.height)
                 }

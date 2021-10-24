@@ -15,6 +15,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.input.mouse.MouseScrollUnit
+import androidx.compose.ui.input.mouse.mouseScrollFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -25,6 +27,7 @@ import androidx.compose.ui.unit.dp
 fun CodeView(
     isVisible: Boolean,
     code: ImageBitmap,
+    onMouseScroll: (delta: MouseScrollUnit.Line) -> Unit = {},
     onGloballyPositioned: (onGloballyPositioned: LayoutCoordinates) -> Unit = {},
 ) {
 
@@ -38,13 +41,18 @@ fun CodeView(
             contentScale = ContentScale.Crop,
             alignment = Alignment.TopStart,
             modifier = Modifier
+                .background(Color.White)
                 .fillMaxSize()
+                .mouseScrollFilter { event, bounds ->
+                    onMouseScroll(event.delta as MouseScrollUnit.Line)
+                    bounds.width
+                    true
+                }
                 .onGloballyPositioned {
                     if (it.size.width != width.value || it.size.height != height.value) {
                         width.value = it.size.width
                         height.value = it.size.height
                         onGloballyPositioned(it)
-                        println(height.value)
                     }
                 },
         )
