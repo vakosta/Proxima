@@ -44,8 +44,12 @@ class EditorState(
                 textState.onPressedBackspace()
             37 ->
                 textState.onPressedLeftArrow()
+            38 ->
+                textState.onPressedUpArrow()
             39 ->
                 textState.onPressedRightArrow()
+            40 ->
+                textState.onPressedDownArrow()
             else ->
                 textState.onTypedChar(keyEvent.utf16CodePoint.toChar())
         }

@@ -52,6 +52,34 @@ class TextState(
                 KotlinSyntaxManager {}
         }
 
+    fun onPressedUpArrow() {
+        if (carriageLine != 0) {
+            carriageLine--
+            val excessCharNumber = max(0, currentLine.length - carriageLineOffset)
+            carriageAbsoluteOffset -= carriageLineOffset + excessCharNumber + 1
+            carriageLineOffset = min(carriageLineOffset, currentLine.length)
+        } else {
+            carriageAbsoluteOffset = 0
+            carriageLineOffset = 0
+        }
+        LOG.log(Level.INFO, "Carriage position: $carriageLine:$carriageLineOffset")
+    }
+
+    fun onPressedDownArrow() {
+        if (carriageLine != pieceTree.lineCount - 1) {
+            val currentLineOffset = currentLine.length - carriageLineOffset
+            carriageLine++
+            val nextLineOffset = min(carriageLineOffset, currentLine.length)
+            val excessCharNumber = max(0, currentLineOffset + nextLineOffset)
+            carriageAbsoluteOffset += excessCharNumber + 1
+            carriageLineOffset = min(carriageLineOffset, currentLine.length)
+        } else {
+            carriageAbsoluteOffset = pieceTree.textLength
+            carriageLineOffset = currentLine.length
+        }
+        LOG.log(Level.INFO, "Carriage position: $carriageLine:$carriageLineOffset")
+    }
+
     fun onPressedLeftArrow() {
         carriageAbsoluteOffset = max(carriageAbsoluteOffset - 1, 0)
         if (carriageLineOffset == 0 && carriageLine > 0) {
@@ -71,7 +99,7 @@ class TextState(
         } else if (carriageLineOffset != currentLine.length) {
             carriageLineOffset++
         }
-        LOG.log(Level.INFO, "$carriageLine $carriageLineOffset")
+        LOG.log(Level.INFO, "Carriage position: $carriageLine:$carriageLineOffset")
     }
 
     fun onPressedBackspace() {
