@@ -2,33 +2,56 @@ package ru.hse.hseditor.presentation.states
 
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.utf16CodePoint
-import org.koin.core.component.KoinComponent
-import org.koin.core.component.inject
-import org.koin.core.parameter.parametersOf
-import ru.hse.hseditor.domain.common.lifetimes.Lifetime
-import ru.hse.hseditor.domain.highlights.TextState
+import ru.hse.hseditor.domain.text.PieceTree
+import ru.hse.hseditor.domain.text.PieceTreeBuilder
 import ru.hse.hseditor.presentation.utils.isRelevant
+import kotlin.math.max
+import kotlin.math.min
 
 class EditorState(
-    private val myLifetime: Lifetime,
     var fileName: String,
     var isActive: Boolean = false,
-    val textState: TextState
-) : KoinComponent {
+    var content: PieceTree = PieceTreeBuilder().build(),
+) {
+
+    var carriagePosition = 0
 
     fun onKeyEvent(keyEvent: KeyEvent): Boolean {
         if (keyEvent.isRelevant()) {
             handleKeyEvent(keyEvent)
+            return true
         }
-        return true
+        return false
     }
 
     private fun handleKeyEvent(keyEvent: KeyEvent) {
         when (keyEvent.nativeKeyEvent.keyCode) {
-            8 -> textState.onPressedBackspace()
-            37 -> textState.onPressedLeftArrow()
-            39 -> textState.onPressedRightArrow()
-            else -> textState.onTypedChar(keyEvent.utf16CodePoint.toChar())
+            8 ->
+                onPressedBackspace()
+            37 ->
+                onPressedLeftArrow()
+            39 ->
+                onPressedRightArrow()
+            else ->
+                onTypedChar(keyEvent.utf16CodePoint.toChar())
         }
+    }
+
+    private fun onPressedLeftArrow() {
+        carriagePosition = max(carriagePosition - 1, 0)
+    }
+
+    private fun onPressedRightArrow() {
+        carriagePosition = min(carriagePosition + 1, content.textLength)
+    }
+
+    private fun onPressedBackspace() {
+        content.deleteAfter(carriagePosition - 1)
+        onPressedLeftArrow() // Step to the left
+    }
+
+    private fun onTypedChar(char: Char) {
+        content.insert(char.toString(), carriagePosition, true)
+        carriagePosition++
     }
 }

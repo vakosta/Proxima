@@ -11,6 +11,13 @@ import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.WindowSize
 import androidx.compose.ui.window.WindowState
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.withContext
 import org.koin.core.component.KoinComponent
 import ru.hse.hseditor.domain.common.lifetimes.Lifetime
 import ru.hse.hseditor.domain.common.lifetimes.defineChildLifetime
@@ -60,18 +67,14 @@ class MainWindowState(
 
     init {
         // TODO extract a separete MainScope to a Lifetime
-//        tickerFlow(500).onEach {
-//            if (Duration.between(typingTime, Instant.now()).seconds >= 1) {
-//                isShowCarriage = !isShowCarriage
-//                updateRenderedContent()
-//            }
-//        }.launchIn(MainScope())
+        tickerFlow(500).onEach { inverseCarriage() }.launchIn(MainScope())
     }
 
-    fun setActiveEditor(editorState: EditorState) {
-        editorStates.forEach { it.isActive = false }
-        editorState.isActive = true
-        updateRenderedContent()
+    private fun inverseCarriage() {
+        if (Duration.between(typingTime, Instant.now()).seconds >= 1) {
+            isShowCarriage = !isShowCarriage
+            updateRenderedContent()
+        }
     }
 
     private fun openEditor(file: FileModel) {
@@ -105,6 +108,10 @@ class MainWindowState(
 
     fun onKeyEvent(keyEvent: KeyEvent): Boolean {
         activeEditorState?.onKeyEvent(keyEvent) ?: return false
+        val isKeyPassed = activeEditorState?.onKeyEvent(keyEvent)
+        if (isKeyPassed == null || !isKeyPassed) {
+            return false
+        }
         typingTime = Instant.now()
         isShowCarriage = true
         LOG.info("Update content from event, thread ${Thread.currentThread().id}")

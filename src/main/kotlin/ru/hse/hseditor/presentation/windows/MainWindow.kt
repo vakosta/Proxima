@@ -37,7 +37,8 @@ import ru.hse.hseditor.presentation.views.Tab
 import kotlin.system.exitProcess
 
 @Composable
-fun MainWindow(state: MainWindowState, onCloseRequest: () -> Unit) = Window(
+fun MainWindow(state: MainWindowState) = Window(
+    title = "HSEditor",
     state = state,
     onCloseRequest = onCloseRequest,
     onKeyEvent = { state.onKeyEvent(it) }
