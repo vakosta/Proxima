@@ -1,12 +1,18 @@
 package ru.hse.hseditor.presentation.states
 
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.utf16CodePoint
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import org.koin.core.parameter.parametersOf
 import ru.hse.hseditor.domain.highlights.TextState
 import ru.hse.hseditor.presentation.utils.isRelevant
+import java.awt.Toolkit
+import java.awt.datatransfer.DataFlavor
 import kotlin.math.max
 import kotlin.math.min
 
@@ -25,8 +31,12 @@ class EditorState(
     var maxTextX = 0F
     var maxTextY = 0F
 
+    @OptIn(ExperimentalComposeUiApi::class)
     fun onKeyEvent(keyEvent: KeyEvent): Boolean {
-        if (keyEvent.isRelevant()) {
+        if (keyEvent.isMetaPressed && keyEvent.key == Key.V) {
+            handlePasteEvent()
+            return true
+        } else if (keyEvent.isRelevant()) {
             handleKeyEvent(keyEvent)
             return true
         }
@@ -53,5 +63,10 @@ class EditorState(
             else ->
                 textState.onTypedChar(keyEvent.utf16CodePoint.toChar())
         }
+    }
+
+    private fun handlePasteEvent() {
+        val clipboard = Toolkit.getDefaultToolkit().systemClipboard.getData(DataFlavor.stringFlavor) as String
+        textState.onAddText(clipboard)
     }
 }

@@ -114,6 +114,14 @@ class TextState(
         onPressedRightArrow()
     }
 
+    fun onAddText(text: String) {
+        pieceTree.insert(text, carriageAbsoluteOffset, true)
+        updateCurrentLineHighlights(text.length)
+        for (i in text.indices) { // FIXME: Slow iterator
+            onPressedRightArrow()
+        }
+    }
+
     private fun updateCurrentLineHighlights(offset: Int) {
         removeIntersectingHighlights(lineStartPosition, lineEndPosition)
         moveHighlights(carriageAbsoluteOffset, offset)
