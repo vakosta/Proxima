@@ -7,8 +7,7 @@ import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.utf16CodePoint
 import org.koin.core.component.KoinComponent
-import org.koin.core.component.inject
-import org.koin.core.parameter.parametersOf
+import ru.hse.hseditor.data.CharCoordinates
 import ru.hse.hseditor.domain.highlights.TextState
 import ru.hse.hseditor.presentation.utils.isRelevant
 import java.awt.Toolkit
@@ -21,7 +20,8 @@ class EditorState(
     var isActive: Boolean = false,
 ) : KoinComponent {
 
-    val textState: TextState by inject { parametersOf("", TextState.Language.Kotlin) }
+    val textState: TextState = TextState(text = "", language = TextState.Language.Kotlin)
+    var charCoordinates: MutableList<CharCoordinates> = mutableListOf()
 
     var verticalOffset: Float = 0F
         private set
@@ -47,6 +47,22 @@ class EditorState(
         val scrollMax = max(0F, (maxTextY + 20F) - windowHeight)
         verticalOffset = min(scrollMax, max(0F, verticalOffset + delta))
     }
+
+    fun onClickEvent(x: Float, y: Float) {
+        val absolutePosition = getCharAbsolutePosition(x, y) ?: return
+        textState.setCaretAbsoluteOffset(absolutePosition)
+        if (textState.firstSelectionPosition == null) {
+            textState.firstSelectionPosition = absolutePosition
+        } else {
+            textState.secondSelectionPosition = absolutePosition
+        }
+    }
+
+    private fun getCharAbsolutePosition(x: Float, y: Float): Int? =
+        charCoordinates
+            .binarySearch(CharCoordinates(x, y))
+            .let { if (-it - 2 >= 0) charCoordinates[-it - 2] else null }
+            ?.absoluteOffset
 
     private fun handleKeyEvent(keyEvent: KeyEvent) {
         when (keyEvent.nativeKeyEvent.keyCode) {

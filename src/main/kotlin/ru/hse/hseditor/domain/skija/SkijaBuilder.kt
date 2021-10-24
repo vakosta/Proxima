@@ -10,7 +10,9 @@ import org.jetbrains.skija.Surface
 import org.jetbrains.skija.TextLine
 import org.jetbrains.skija.Typeface
 import org.koin.core.component.KoinComponent
+import ru.hse.hseditor.data.CharCoordinates
 import ru.hse.hseditor.domain.common.COLOR_BLACK
+import ru.hse.hseditor.domain.common.COLOR_BLUE
 import ru.hse.hseditor.domain.common.COLOR_GRAY
 import ru.hse.hseditor.domain.highlights.TextState
 import kotlin.math.max
@@ -18,13 +20,15 @@ import kotlin.math.min
 
 class SkijaBuilder(
     private val content: String = "",
-    private val carriagePosition: Int = 0,
+    private val caretPosition: Int = 0,
     private val isShowCarriage: Boolean = true,
     private val verticalScrollOffset: Float = 0F,
     private val horizontalScrollOffset: Float = 0F,
     private val width: Int = 1,
     private val height: Int = 1,
     private val textState: TextState? = null,
+    private val startSelectionPosition: Int = -1,
+    private val endSelectionPosition: Int = -1,
 ) : KoinComponent {
 
     private val surface: Surface = Surface.makeRasterN32Premul(width, height)
@@ -43,6 +47,8 @@ class SkijaBuilder(
     var maxTextY = baseY
         private set
 
+    val charCoordinates: MutableList<CharCoordinates> = mutableListOf()
+
     fun build(): ImageBitmap {
         paintOnCanvas(surface.canvas, paint)
         return surface.makeImageSnapshot().asImageBitmap()
@@ -54,22 +60,24 @@ class SkijaBuilder(
     ) {
         for (i in content.indices) {
             val c: Char = content[i]
-            if (carriagePosition == i && isShowCarriage) {
+            if (caretPosition == i && isShowCarriage) {
                 drawCarriage(canvas, paint)
             }
             if (c != '\n') {
                 addChar(c, i, canvas, paint)
             } else {
-                addNewLine()
+                addNewLine(i)
             }
         }
-        if (carriagePosition == content.length && isShowCarriage) {
+        charCoordinates.add(CharCoordinates(x, y, content.length))
+        if (caretPosition == content.length && isShowCarriage) {
             drawCarriage(canvas, paint)
         }
         drawScrollbar(canvas, paint)
     }
 
-    private fun addNewLine() {
+    private fun addNewLine(charPosition: Int) {
+        charCoordinates.add(CharCoordinates(x, y, charPosition))
         x = baseX
         y += (-font.metrics.ascent + font.metrics.descent + font.metrics.leading).toInt()
         maxTextX = max(x + horizontalScrollOffset, maxTextX)
@@ -82,9 +90,15 @@ class SkijaBuilder(
         canvas: Canvas,
         paint: Paint,
     ) {
-        paint.color = textState?.getCharColor(charPosition) ?: COLOR_BLACK
         val textLine = TextLine.make(c.toString(), font)
+        if (charPosition in startSelectionPosition until endSelectionPosition) {
+            paint.color = COLOR_BLUE
+            val rect = Rect(x, y + font.metrics.ascent, x + textLine.width + 1, y + font.metrics.descent)
+            canvas.drawRect(rect, paint)
+        }
+        paint.color = textState?.getCharColor(charPosition) ?: COLOR_BLACK
         canvas.drawTextLine(textLine, x, y, paint)
+        charCoordinates.add(CharCoordinates(x, y, charPosition))
         x += (textLine.width + 1).toInt()
         maxTextX = max(x + horizontalScrollOffset, maxTextX)
     }

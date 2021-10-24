@@ -21,11 +21,13 @@ class TextState(
     val language: Language,
     val pieceTree: PieceTree = PieceTreeBuilder().build(),
     val highlights: IntervalTree<Int> = IntervalTree<Int>(),
+    var firstSelectionPosition: Int? = null,
+    var secondSelectionPosition: Int? = null,
 ) {
 
     private val currentLine: String
         get() {
-            val output = pieceTree.getLineContent(carriageLine + 1)
+            val output = pieceTree.getLineContent(caretLine + 1)
             return try {
                 output.substring(0, output.indexOfFirst { it == '\n' })
             } catch (e: StringIndexOutOfBoundsException) {
@@ -33,16 +35,16 @@ class TextState(
             }
         }
 
-    var carriageAbsoluteOffset = 0
+    var caretAbsoluteOffset = 0
         private set
-    var carriageLine = 0
+    var caretLine = 0
         private set
-    var carriageLineOffset = 0
+    var caretLineOffset = 0
         private set
     val lineStartPosition: Int
-        get() = carriageAbsoluteOffset - carriageLineOffset
+        get() = caretAbsoluteOffset - caretLineOffset
     val lineEndPosition: Int
-        get() = carriageAbsoluteOffset + (currentLine.length - carriageLineOffset) - 1
+        get() = caretAbsoluteOffset + (currentLine.length - caretLineOffset) - 1
 
     private val syntaxManager: SyntaxManager
         get() = when (language) {
@@ -52,70 +54,83 @@ class TextState(
                 KotlinSyntaxManager {}
         }
 
-    fun onPressedUpArrow() {
-        if (carriageLine != 0) {
-            carriageLine--
-            val excessCharNumber = max(0, currentLine.length - carriageLineOffset)
-            carriageAbsoluteOffset -= carriageLineOffset + excessCharNumber + 1
-            carriageLineOffset = min(carriageLineOffset, currentLine.length)
+    fun setCaretAbsoluteOffset(absoluteOffset: Int) {
+        // FIXME: Painful loop
+        if (absoluteOffset - caretAbsoluteOffset > 0) {
+            for (i in 0 until (absoluteOffset - caretAbsoluteOffset)) {
+                onPressedRightArrow()
+            }
         } else {
-            carriageAbsoluteOffset = 0
-            carriageLineOffset = 0
+            for (i in 0 until (caretAbsoluteOffset - absoluteOffset)) {
+                onPressedLeftArrow()
+            }
         }
-        LOG.log(Level.INFO, "Carriage position: $carriageLine:$carriageLineOffset")
+    }
+
+    fun onPressedUpArrow() {
+        if (caretLine != 0) {
+            caretLine--
+            val excessCharNumber = max(0, currentLine.length - caretLineOffset)
+            caretAbsoluteOffset -= caretLineOffset + excessCharNumber + 1
+            caretLineOffset = min(caretLineOffset, currentLine.length)
+        } else {
+            caretAbsoluteOffset = 0
+            caretLineOffset = 0
+        }
+        LOG.log(Level.INFO, "Carriage position: $caretLine:$caretLineOffset")
     }
 
     fun onPressedDownArrow() {
-        if (carriageLine != pieceTree.lineCount - 1) {
-            val currentLineOffset = currentLine.length - carriageLineOffset
-            carriageLine++
-            val nextLineOffset = min(carriageLineOffset, currentLine.length)
+        if (caretLine != pieceTree.lineCount - 1) {
+            val currentLineOffset = currentLine.length - caretLineOffset
+            caretLine++
+            val nextLineOffset = min(caretLineOffset, currentLine.length)
             val excessCharNumber = max(0, currentLineOffset + nextLineOffset)
-            carriageAbsoluteOffset += excessCharNumber + 1
-            carriageLineOffset = min(carriageLineOffset, currentLine.length)
+            caretAbsoluteOffset += excessCharNumber + 1
+            caretLineOffset = min(caretLineOffset, currentLine.length)
         } else {
-            carriageAbsoluteOffset = pieceTree.textLength
-            carriageLineOffset = currentLine.length
+            caretAbsoluteOffset = pieceTree.textLength
+            caretLineOffset = currentLine.length
         }
-        LOG.log(Level.INFO, "Carriage position: $carriageLine:$carriageLineOffset")
+        LOG.log(Level.INFO, "Carriage position: $caretLine:$caretLineOffset")
     }
 
     fun onPressedLeftArrow() {
-        carriageAbsoluteOffset = max(carriageAbsoluteOffset - 1, 0)
-        if (carriageLineOffset == 0 && carriageLine > 0) {
-            carriageLine--
-            carriageLineOffset = currentLine.length
-        } else if (carriageLineOffset != 0) {
-            carriageLineOffset--
+        caretAbsoluteOffset = max(caretAbsoluteOffset - 1, 0)
+        if (caretLineOffset == 0 && caretLine > 0) {
+            caretLine--
+            caretLineOffset = currentLine.length
+        } else if (caretLineOffset != 0) {
+            caretLineOffset--
         }
-        LOG.log(Level.INFO, "Carriage position: $carriageLine:$carriageLineOffset")
+        LOG.log(Level.INFO, "Carriage position: $caretLine:$caretLineOffset")
     }
 
     fun onPressedRightArrow() {
-        carriageAbsoluteOffset = min(carriageAbsoluteOffset + 1, pieceTree.textLength)
-        if (carriageLineOffset == currentLine.length && carriageLine < pieceTree.lineCount - 1) {
-            carriageLine++
-            carriageLineOffset = 0
-        } else if (carriageLineOffset != currentLine.length) {
-            carriageLineOffset++
+        caretAbsoluteOffset = min(caretAbsoluteOffset + 1, pieceTree.textLength)
+        if (caretLineOffset == currentLine.length && caretLine < pieceTree.lineCount - 1) {
+            caretLine++
+            caretLineOffset = 0
+        } else if (caretLineOffset != currentLine.length) {
+            caretLineOffset++
         }
-        LOG.log(Level.INFO, "Carriage position: $carriageLine:$carriageLineOffset")
+        LOG.log(Level.INFO, "Carriage position: $caretLine:$caretLineOffset")
     }
 
     fun onPressedBackspace() {
-        pieceTree.deleteAfter(carriageAbsoluteOffset - 1)
+        pieceTree.deleteAfter(caretAbsoluteOffset - 1)
         updateCurrentLineHighlights(-1)
         onPressedLeftArrow()
     }
 
     fun onTypedChar(char: Char) {
-        pieceTree.insert(char.toString(), carriageAbsoluteOffset, true)
+        pieceTree.insert(char.toString(), caretAbsoluteOffset, true)
         updateCurrentLineHighlights(1)
         onPressedRightArrow()
     }
 
     fun onAddText(text: String) {
-        pieceTree.insert(text, carriageAbsoluteOffset, true)
+        pieceTree.insert(text, caretAbsoluteOffset, true)
         updateCurrentLineHighlights(text.length)
         for (i in text.indices) { // FIXME: Slow iterator
             onPressedRightArrow()
@@ -124,7 +139,7 @@ class TextState(
 
     private fun updateCurrentLineHighlights(offset: Int) {
         removeIntersectingHighlights(lineStartPosition, lineEndPosition)
-        moveHighlights(carriageAbsoluteOffset, offset)
+        moveHighlights(caretAbsoluteOffset, offset)
         fillHighlights(currentLine, lineStartPosition)
     }
 

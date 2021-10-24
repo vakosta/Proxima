@@ -1,5 +1,6 @@
 package ru.hse.hseditor.presentation.views
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -17,16 +18,34 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.mouse.MouseScrollUnit
 import androidx.compose.ui.input.mouse.mouseScrollFilter
+import androidx.compose.ui.input.pointer.consumeDownChange
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.pointerMoveFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import ru.hse.hseditor.presentation.utils.cursorForText
 
+enum class MouseButton {
+    LEFT,
+    MIDDLE,
+    RIGHT,
+}
+
+enum class MouseEvent {
+    PRESS,
+    RELEASE,
+}
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun CodeView(
     isVisible: Boolean,
     code: ImageBitmap,
+    onMouseMove: (x: Float, y: Float) -> Unit = { _, _ -> },
+    onPointChangeState: (mouseEvent: MouseEvent) -> Unit = {},
     onMouseScroll: (delta: MouseScrollUnit.Line) -> Unit = {},
     onGloballyPositioned: (onGloballyPositioned: LayoutCoordinates) -> Unit = {},
 ) {
@@ -43,6 +62,32 @@ fun CodeView(
             modifier = Modifier
                 .background(Color.White)
                 .fillMaxSize()
+                .pointerMoveFilter(onMove = {
+                    onMouseMove(it.x, it.y)
+                    false
+                })
+                .pointerInput(Unit) {
+                    while (true) {
+                        awaitPointerEventScope {
+                            val pointerEvent = awaitPointerEvent()
+                            pointerEvent.changes.forEach {
+                                val button = when (pointerEvent.mouseEvent?.button) {
+                                    1 -> MouseButton.LEFT
+                                    2 -> MouseButton.MIDDLE
+                                    3 -> MouseButton.RIGHT
+                                    else -> null
+                                }
+                                if (button != null && it.pressed && !it.previousPressed) {
+                                    onPointChangeState(MouseEvent.PRESS)
+                                    it.consumeDownChange()
+                                } else if (button != null && !it.pressed && it.previousPressed) {
+                                    onPointChangeState(MouseEvent.RELEASE)
+                                    it.consumeDownChange()
+                                }
+                            }
+                        }
+                    }
+                }
                 .mouseScrollFilter { event, bounds ->
                     onMouseScroll(event.delta as MouseScrollUnit.Line)
                     bounds.width
@@ -54,7 +99,8 @@ fun CodeView(
                         height.value = it.size.height
                         onGloballyPositioned(it)
                     }
-                },
+                }
+                .cursorForText(),
         )
     } else {
         Column(

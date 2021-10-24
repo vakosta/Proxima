@@ -22,8 +22,11 @@ import ru.hse.hseditor.domain.app.tickerFlow
 import ru.hse.hseditor.domain.filesystem.FileSystemManager
 import ru.hse.hseditor.domain.skija.SkijaBuilder
 import ru.hse.hseditor.presentation.model.File
+import ru.hse.hseditor.presentation.views.MouseEvent
 import java.time.Duration
 import java.time.Instant
+import kotlin.math.max
+import kotlin.math.min
 
 class MainWindowState(
     private val myLifetime: Lifetime,
@@ -34,6 +37,10 @@ class MainWindowState(
 ) : KoinComponent, WindowState {
 
     private val fileSystemManager: FileSystemManager by inject()
+
+    private var cursorX = 0F
+    private var cursorY = 0F
+    private var cursorState: MouseEvent = MouseEvent.RELEASE
 
     var renderedContent: ImageBitmap by mutableStateOf(SkijaBuilder().build())
 
@@ -91,6 +98,30 @@ class MainWindowState(
         return true
     }
 
+    fun onMousePressEvent(event: MouseEvent) {
+        if (event == MouseEvent.PRESS) {
+            activeEditorState?.textState?.firstSelectionPosition = null
+            activeEditorState?.textState?.secondSelectionPosition = null
+        }
+        cursorState = event
+        onClickEvent()
+    }
+
+    fun onClickEvent() {
+        activeEditorState?.onClickEvent(cursorX, cursorY) ?: return
+        typingTime = Instant.now()
+        isShowCarriage = true
+        updateRenderedContent()
+    }
+
+    fun onMouseMoveEvent(x: Float, y: Float) {
+        cursorX = x
+        cursorY = y
+        if (cursorState == MouseEvent.PRESS) {
+            onClickEvent()
+        }
+    }
+
     fun onScrollEvent(mouseScrollUnit: MouseScrollUnit.Line) {
         activeEditorState?.onVerticalOffset(mouseScrollUnit.value * 20, renderedContent.height)
         updateRenderedContent()
@@ -102,16 +133,29 @@ class MainWindowState(
         editorStates.forEach { it.onVerticalOffset(0F, height) }
         val skijaBuilder = SkijaBuilder(
             content = editor.textState.pieceTree.getLinesRawContent(),
-            carriagePosition = editor.textState.carriageAbsoluteOffset,
+            caretPosition = editor.textState.caretAbsoluteOffset,
             isShowCarriage = isShowCarriage,
             verticalScrollOffset = editor.verticalOffset,
             horizontalScrollOffset = editor.horizontalOffset,
             width = width,
             height = height,
             textState = editor.textState,
+            startSelectionPosition = min(
+                editor.textState.firstSelectionPosition ?: -1,
+                editor.textState.secondSelectionPosition ?: -1,
+            ),
+            endSelectionPosition = if (editor.textState.secondSelectionPosition == null) {
+                -1
+            } else {
+                max(
+                    editor.textState.firstSelectionPosition ?: -1,
+                    editor.textState.secondSelectionPosition ?: -1,
+                )
+            },
         )
         renderedContent = skijaBuilder.build()
         editor.maxTextX = skijaBuilder.maxTextX
         editor.maxTextY = skijaBuilder.maxTextY
+        editor.charCoordinates = skijaBuilder.charCoordinates
     }
 }
