@@ -13,6 +13,7 @@ import ru.hse.hseditor.domain.text.PieceTree
 import ru.hse.hseditor.domain.text.PieceTreeBuilder
 import java.util.logging.Level
 import java.util.logging.Logger
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
@@ -25,6 +26,14 @@ class TextState(
     var secondSelectionPosition: Int? = null,
 ) {
 
+    private val syntaxManager: SyntaxManager
+        get() = when (language) {
+            Language.Kotlin ->
+                KotlinSyntaxManager {}
+            Language.Java ->
+                KotlinSyntaxManager {}
+        }
+
     private val currentLine: String
         get() {
             val output = pieceTree.getLineContent(caretLine + 1)
@@ -34,7 +43,6 @@ class TextState(
                 output
             }
         }
-
     var caretAbsoluteOffset = 0
         private set
     var caretLine = 0
@@ -46,41 +54,40 @@ class TextState(
     val lineEndPosition: Int
         get() = caretAbsoluteOffset + (currentLine.length - caretLineOffset) - 1
 
-    private val syntaxManager: SyntaxManager
-        get() = when (language) {
-            Language.Kotlin ->
-                KotlinSyntaxManager {}
-            Language.Java ->
-                KotlinSyntaxManager {}
-        }
+    fun clearSelectionPositions() {
+        firstSelectionPosition = null
+        secondSelectionPosition = null
+    }
 
-    fun setCaretAbsoluteOffset(absoluteOffset: Int) {
+    fun setCaretAbsoluteOffset(absoluteOffset: Int, withSelection: Boolean) {
         // FIXME: Painful loop
-        if (absoluteOffset - caretAbsoluteOffset > 0) {
-            for (i in 0 until (absoluteOffset - caretAbsoluteOffset)) {
-                onPressedRightArrow()
+        val offsetDiff = absoluteOffset - caretAbsoluteOffset
+        if (offsetDiff > 0) {
+            for (i in 0 until abs(offsetDiff)) {
+                onPressedRightArrow(withSelection)
             }
         } else {
-            for (i in 0 until (caretAbsoluteOffset - absoluteOffset)) {
-                onPressedLeftArrow()
+            for (i in 0 until abs(offsetDiff)) {
+                onPressedLeftArrow(withSelection)
             }
         }
     }
 
-    fun onPressedUpArrow() {
+    fun onPressedUpArrow(withSelection: Boolean) {
         if (caretLine != 0) {
             caretLine--
-            val excessCharNumber = max(0, currentLine.length - caretLineOffset)
-            caretAbsoluteOffset -= caretLineOffset + excessCharNumber + 1
+            val excessCharNumber = caretLineOffset + max(0, currentLine.length - caretLineOffset)
+            caretAbsoluteOffset -= excessCharNumber + 1
             caretLineOffset = min(caretLineOffset, currentLine.length)
         } else {
             caretAbsoluteOffset = 0
             caretLineOffset = 0
         }
+        updateSelection(withSelection)
         LOG.log(Level.INFO, "Carriage position: $caretLine:$caretLineOffset")
     }
 
-    fun onPressedDownArrow() {
+    fun onPressedDownArrow(withSelection: Boolean) {
         if (caretLine != pieceTree.lineCount - 1) {
             val currentLineOffset = currentLine.length - caretLineOffset
             caretLine++
@@ -92,10 +99,11 @@ class TextState(
             caretAbsoluteOffset = pieceTree.textLength
             caretLineOffset = currentLine.length
         }
+        updateSelection(withSelection)
         LOG.log(Level.INFO, "Carriage position: $caretLine:$caretLineOffset")
     }
 
-    fun onPressedLeftArrow() {
+    fun onPressedLeftArrow(withSelection: Boolean) {
         caretAbsoluteOffset = max(caretAbsoluteOffset - 1, 0)
         if (caretLineOffset == 0 && caretLine > 0) {
             caretLine--
@@ -103,10 +111,11 @@ class TextState(
         } else if (caretLineOffset != 0) {
             caretLineOffset--
         }
+        updateSelection(withSelection)
         LOG.log(Level.INFO, "Carriage position: $caretLine:$caretLineOffset")
     }
 
-    fun onPressedRightArrow() {
+    fun onPressedRightArrow(withSelection: Boolean) {
         caretAbsoluteOffset = min(caretAbsoluteOffset + 1, pieceTree.textLength)
         if (caretLineOffset == currentLine.length && caretLine < pieceTree.lineCount - 1) {
             caretLine++
@@ -114,26 +123,40 @@ class TextState(
         } else if (caretLineOffset != currentLine.length) {
             caretLineOffset++
         }
+        updateSelection(withSelection)
         LOG.log(Level.INFO, "Carriage position: $caretLine:$caretLineOffset")
     }
 
     fun onPressedBackspace() {
         pieceTree.deleteAfter(caretAbsoluteOffset - 1)
         updateCurrentLineHighlights(-1)
-        onPressedLeftArrow()
+        onPressedLeftArrow(false)
     }
 
     fun onTypedChar(char: Char) {
         pieceTree.insert(char.toString(), caretAbsoluteOffset, true)
         updateCurrentLineHighlights(1)
-        onPressedRightArrow()
+        onPressedRightArrow(false)
     }
 
     fun onAddText(text: String) {
         pieceTree.insert(text, caretAbsoluteOffset, true)
         updateCurrentLineHighlights(text.length)
         for (i in text.indices) { // FIXME: Slow iterator
-            onPressedRightArrow()
+            onPressedRightArrow(false)
+        }
+    }
+
+    fun getCharColor(position: Int): Int {
+        val color: Int = getHighlights(position).firstOrNull { it.params.color != null }?.params?.color ?: COLOR_BLACK
+        return color
+    }
+
+    private fun updateSelection(withSelection: Boolean) {
+        if (withSelection) {
+            secondSelectionPosition = caretAbsoluteOffset
+        } else {
+            clearSelectionPositions()
         }
     }
 
@@ -174,11 +197,6 @@ class TextState(
             )
             highlights.add(highlightInterval)
         }
-    }
-
-    fun getCharColor(position: Int): Int {
-        val color: Int = getHighlights(position).firstOrNull { it.params.color != null }?.params?.color ?: COLOR_BLACK
-        return color
     }
 
     private fun getHighlights(position: Int): Set<HighlightInterval> =

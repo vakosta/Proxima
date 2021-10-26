@@ -34,7 +34,7 @@ class EditorState(
     @OptIn(ExperimentalComposeUiApi::class)
     fun onKeyEvent(keyEvent: KeyEvent): Boolean {
         if (keyEvent.isMetaPressed && keyEvent.key == Key.V) {
-            handlePasteEvent()
+            handlePasteFromClipboard()
             return true
         } else if (keyEvent.isRelevant()) {
             handleKeyEvent(keyEvent)
@@ -43,19 +43,19 @@ class EditorState(
         return false
     }
 
-    fun onVerticalOffset(delta: Float, windowHeight: Int) {
+    fun setVerticalOffset(delta: Float, windowHeight: Int) {
         val scrollMax = max(0F, (maxTextY + 20F) - windowHeight)
         verticalOffset = min(scrollMax, max(0F, verticalOffset + delta))
     }
 
-    fun onClickEvent(x: Float, y: Float) {
+    fun updateCaretPosition(x: Float, y: Float) {
         val absolutePosition = getCharAbsolutePosition(x, y) ?: return
-        textState.setCaretAbsoluteOffset(absolutePosition)
         if (textState.firstSelectionPosition == null) {
             textState.firstSelectionPosition = absolutePosition
         } else {
             textState.secondSelectionPosition = absolutePosition
         }
+        textState.setCaretAbsoluteOffset(absolutePosition, true)
     }
 
     private fun getCharAbsolutePosition(x: Float, y: Float): Int? =
@@ -69,19 +69,19 @@ class EditorState(
             8 ->
                 textState.onPressedBackspace()
             37 ->
-                textState.onPressedLeftArrow()
+                textState.onPressedLeftArrow(false)
             38 ->
-                textState.onPressedUpArrow()
+                textState.onPressedUpArrow(false)
             39 ->
-                textState.onPressedRightArrow()
+                textState.onPressedRightArrow(false)
             40 ->
-                textState.onPressedDownArrow()
+                textState.onPressedDownArrow(false)
             else ->
                 textState.onTypedChar(keyEvent.utf16CodePoint.toChar())
         }
     }
 
-    private fun handlePasteEvent() {
+    private fun handlePasteFromClipboard() {
         val clipboard = Toolkit.getDefaultToolkit().systemClipboard.getData(DataFlavor.stringFlavor) as String
         textState.onAddText(clipboard)
     }

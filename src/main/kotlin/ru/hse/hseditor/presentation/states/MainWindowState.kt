@@ -63,13 +63,6 @@ class MainWindowState(
         tickerFlow(500).onEach { inverseCarriage() }.launchIn(MainScope())
     }
 
-    private fun inverseCarriage() {
-        if (Duration.between(typingTime, Instant.now()).seconds >= 1) {
-            isShowCarriage = !isShowCarriage
-            updateRenderedContent()
-        }
-    }
-
     fun openEditor(file: File) {
         val editorState = EditorState(
             fileName = file.name,
@@ -98,39 +91,31 @@ class MainWindowState(
         return true
     }
 
-    fun onMousePressEvent(event: MouseEvent) {
+    fun onPointChangeState(event: MouseEvent) {
         if (event == MouseEvent.PRESS) {
-            activeEditorState?.textState?.firstSelectionPosition = null
-            activeEditorState?.textState?.secondSelectionPosition = null
+            activeEditorState?.textState?.clearSelectionPositions()
         }
         cursorState = event
-        onClickEvent()
+        updateCaretPosition()
     }
 
-    fun onClickEvent() {
-        activeEditorState?.onClickEvent(cursorX, cursorY) ?: return
-        typingTime = Instant.now()
-        isShowCarriage = true
-        updateRenderedContent()
-    }
-
-    fun onMouseMoveEvent(x: Float, y: Float) {
+    fun onPointMove(x: Float, y: Float) {
         cursorX = x
         cursorY = y
         if (cursorState == MouseEvent.PRESS) {
-            onClickEvent()
+            updateCaretPosition()
         }
     }
 
-    fun onScrollEvent(mouseScrollUnit: MouseScrollUnit.Line) {
-        activeEditorState?.onVerticalOffset(mouseScrollUnit.value * 20, renderedContent.height)
+    fun onScroll(mouseScrollUnit: MouseScrollUnit.Line) {
+        activeEditorState?.setVerticalOffset(mouseScrollUnit.value * 20, renderedContent.height)
         updateRenderedContent()
     }
 
     fun updateRenderedContent(width: Int = renderedContent.width, height: Int = renderedContent.height) {
         // TODO: Start at EditorRange() and end at EditorRange(), will be faster
         val editor = activeEditorState ?: return
-        editorStates.forEach { it.onVerticalOffset(0F, height) }
+        editorStates.forEach { it.setVerticalOffset(0F, height) }
         val skijaBuilder = SkijaBuilder(
             content = editor.textState.pieceTree.getLinesRawContent(),
             caretPosition = editor.textState.caretAbsoluteOffset,
@@ -157,5 +142,19 @@ class MainWindowState(
         editor.maxTextX = skijaBuilder.maxTextX
         editor.maxTextY = skijaBuilder.maxTextY
         editor.charCoordinates = skijaBuilder.charCoordinates
+    }
+
+    private fun inverseCarriage() {
+        if (Duration.between(typingTime, Instant.now()).seconds >= 1) {
+            isShowCarriage = !isShowCarriage
+            updateRenderedContent()
+        }
+    }
+
+    private fun updateCaretPosition() {
+        activeEditorState?.updateCaretPosition(cursorX, cursorY) ?: return
+        typingTime = Instant.now()
+        isShowCarriage = true
+        updateRenderedContent()
     }
 }
