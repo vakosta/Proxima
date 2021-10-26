@@ -6,25 +6,43 @@ import com.lodborg.intervaltree.IntervalTree
 import ru.hse.hseditor.data.CharParameters
 import ru.hse.hseditor.data.HighlightInterval
 import ru.hse.hseditor.domain.common.lifetimes.Lifetime
-import ru.hse.hseditor.domain.common.locks.runBlockingRead
 import ru.hse.hseditor.domain.common.COLOR_BLACK
+import ru.hse.hseditor.domain.common.Event
 import ru.hse.hseditor.domain.common.TOKEN_COLORS
 import ru.hse.hseditor.domain.highlights.syntaxmanager.KotlinSyntaxManager
 import ru.hse.hseditor.domain.highlights.syntaxmanager.SyntaxManager
-import ru.hse.hseditor.domain.text.PieceTree
-import ru.hse.hseditor.domain.text.PieceTreeBuilder
 import ru.hse.hseditor.domain.text.document.Document
+import ru.hse.hseditor.presentation.states.EditorState
 import java.util.logging.Level
 import java.util.logging.Logger
 import kotlin.math.max
 import kotlin.math.min
 
+enum class ExternalModificationKind {
+    OPEN_DOCUMENT_DISC_SYNC,
+    /* PSI_MODIFICATION, */
+    /* REFORMAT, */
+    /* ... etc ... */
+
+    DELETED_FROM_DISC
+}
+
+// May have to attach some more data in the future
+data class ExternalModificationDescriptor(val kind: ExternalModificationKind)
+
 class TextState(
     private val myLifetime: Lifetime,
     val language: Language,
-    val document: Document,
+    var document: Document,
     val highlights: IntervalTree<Int> = IntervalTree<Int>(),
 ) {
+
+    val externalModificationEvent = Event<ExternalModificationDescriptor>("TextState::externalModificationEvent")
+
+    init {
+        document.textState = this
+        fillHighlights(document.getRawContent())
+    }
 
     private val currentLine: String
         get() {
@@ -116,7 +134,7 @@ class TextState(
         }
     }
 
-    private fun fillHighlights(text: String, offset: Int = 0) = runBlockingRead {
+    private fun fillHighlights(text: String, offset: Int = 0) {
         val tokens = syntaxManager.getTokens(text)
         for (token in tokens) {
             val highlightInterval = HighlightInterval(
@@ -151,6 +169,6 @@ class TextState(
     }
 
     companion object {
-        val LOG = Logger.getLogger(TextState::class.java.name)
+        val LOG = Logger.getLogger(TextState::class.java.name).apply { setFilter { false } }
     }
 }

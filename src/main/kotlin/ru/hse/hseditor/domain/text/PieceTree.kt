@@ -256,7 +256,7 @@ internal class PieceTreeSearchCache(
     }
 
     companion object {
-        val LOG = Logger.getLogger(PieceTreeSearchCache::class.java.name)
+        val LOG = Logger.getLogger(PieceTreeSearchCache::class.java.name).apply { setFilter { false } }
     }
 }
 
@@ -413,6 +413,9 @@ class PieceTree(
         return resBuilder.toString()
     }
 
+    /**
+     * Returns a line with the line ending attached.
+     */
     fun getLineContent(lineNo: Int): String {
         if (myLastVisitedLineNo == lineNo) {
             return myLastVisitedLineValue
@@ -489,7 +492,7 @@ class PieceTree(
 
                     return chunk.chunkSubstring(
                         startOffset + prevMemorizedOffset,
-                        startOffset + travNode.piece.textLen
+                        startOffset + memorizedOffset - endOffset
                     )
                 } else if (travNode.lineFeedsLeft + travNode.piece.lineFeeds == travNodeLineNo - 1) {
                     val prevAccumulatedValue =
@@ -549,7 +552,7 @@ class PieceTree(
     }
 
     companion object {
-        val LOG = Logger.getLogger(Piece::class.java.name)
+        val LOG = Logger.getLogger(Piece::class.java.name).apply { setFilter { false } }
     }
 
     /**

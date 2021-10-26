@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -32,7 +33,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import ru.hse.hseditor.presentation.states.FileTreeViewModel
+import kotlinx.coroutines.launch
+import ru.hse.hseditor.presentation.states.FileTreeModel
 import ru.hse.hseditor.presentation.utils.pointerMoveFilter
 import ru.hse.hseditor.presentation.utils.withoutWidthConstraints
 import ru.hse.hseditor.presentation.views.common.VerticalScrollbar
@@ -53,9 +55,10 @@ fun FileTreeViewTabView() = Surface {
 }
 
 @Composable
-fun FileTreeView(model: FileTreeViewModel) = Surface(
+fun FileTreeView(model: FileTreeModel) = Surface(
     modifier = Modifier.fillMaxSize()
 ) {
+    val scope = rememberCoroutineScope()
     with(LocalDensity.current) {
         Box {
             val scrollState = rememberLazyListState()
@@ -67,7 +70,10 @@ fun FileTreeView(model: FileTreeViewModel) = Surface(
                 state = scrollState
             ) {
                 items(model.items.size) {
-                    FileTreeItemView(fontSize, lineHeight, model.items[it])
+                    FileTreeItemView(fontSize, lineHeight, model.items[it],
+                    onClick = {
+                        scope.launch { model.items[it].open() }
+                    })
                 }
             }
 
@@ -80,10 +86,10 @@ fun FileTreeView(model: FileTreeViewModel) = Surface(
 }
 
 @Composable
-private fun FileTreeItemView(fontSize: TextUnit, height: Dp, model: FileTreeViewModel.Item) = Row(
+private fun FileTreeItemView(fontSize: TextUnit, height: Dp, model: FileTreeModel.Item, onClick: () -> Unit) = Row(
     modifier = Modifier
         .wrapContentHeight()
-        .clickable { model.open() }
+        .clickable(onClick = onClick)
         .padding(start = 24.dp * model.level)
         .height(height)
         .fillMaxWidth()
@@ -116,9 +122,9 @@ private fun FileTreeItemView(fontSize: TextUnit, height: Dp, model: FileTreeView
 }
 
 @Composable
-private fun FileItemIcon(modifier: Modifier, model: FileTreeViewModel.Item) = Box(modifier.size(24.dp).padding(4.dp)) {
+private fun FileItemIcon(modifier: Modifier, model: FileTreeModel.Item) = Box(modifier.size(24.dp).padding(4.dp)) {
     when (val type = model.type) {
-        is FileTreeViewModel.ItemType.Folder -> when {
+        is FileTreeModel.ItemType.Folder -> when {
             !type.canExpand -> Unit
             type.isExpanded -> Icon(
                 Icons.Default.KeyboardArrowDown, contentDescription = null, tint = LocalContentColor.current
@@ -127,7 +133,7 @@ private fun FileItemIcon(modifier: Modifier, model: FileTreeViewModel.Item) = Bo
                 Icons.Default.KeyboardArrowRight, contentDescription = null, tint = LocalContentColor.current
             )
         }
-        is FileTreeViewModel.ItemType.File -> when (type.ext) {
+        is FileTreeModel.ItemType.File -> when (type.ext) {
             else -> Icon(Icons.Default.AccountBox, contentDescription = null, tint = Color(0xFF3E86A0))
         }
     }

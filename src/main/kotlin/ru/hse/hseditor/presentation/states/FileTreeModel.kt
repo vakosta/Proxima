@@ -3,6 +3,8 @@ package ru.hse.hseditor.presentation.states
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import ru.hse.hseditor.domain.common.vfs.NodeChangeKind
+import ru.hse.hseditor.domain.common.vfs.OsVFSNode
 import ru.hse.hseditor.presentation.model.FileModel
 
 class ExpandableFile(
@@ -24,9 +26,9 @@ class ExpandableFile(
     }
 }
 
-class FileTreeViewModel(
+class FileTreeModel(
     val root: FileModel,
-    val openFile: (file: FileModel) -> Unit
+    val openFile: suspend (file: FileModel) -> Unit
 ) {
     private val expandableRoot = ExpandableFile(root, 0).apply { toggleExpanded() }
 
@@ -46,7 +48,7 @@ class FileTreeViewModel(
                 ItemType.File(ext = file.file.name.substringAfterLast(".").lowercase())
             }
 
-        fun open() = when (type) {
+        suspend fun open() = when (type) {
             is ItemType.Folder ->
                 file.toggleExpanded()
             is ItemType.File ->
@@ -71,4 +73,5 @@ class FileTreeViewModel(
         addTo(list)
         return list
     }
+
 }

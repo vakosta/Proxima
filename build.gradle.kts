@@ -65,5 +65,7 @@ compose.desktop {
             packageName = "HSEditor"
             packageVersion = "1.0.0"
         }
+
+        jvmArgs("-Dcompose.application.configure.swing.globals=false")
     }
 }

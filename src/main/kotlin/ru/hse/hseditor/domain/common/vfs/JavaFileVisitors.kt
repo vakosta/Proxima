@@ -27,7 +27,7 @@ internal class MountVFSFileVisitor(
             return FileVisitResult.SKIP_SUBTREE
         }
 
-        myRoot = OsVirtualDirectory(null, dir, myVsfStub)
+        myRoot = OsVirtualDirectory(myVsfStub.fsLifetime, null, dir, myVsfStub)
         dir.register(
             myWatcher,
             StandardWatchEventKinds.ENTRY_CREATE,
@@ -43,21 +43,9 @@ internal class MountVFSFileVisitor(
         require(attrs != null) { "Null file attributes encountered while mounting a directory!" }
 
         if (attrs.isSymbolicLink) {
-            root.mutChildren.add(
-                OsVirtualSymlink(
-                    root,
-                    root.path.relativize(file),
-                    myVsfStub
-                )
-            )
+            root.mutChildren.add(OsVirtualSymlink(myVsfStub.fsLifetime, root, file, myVsfStub))
         } else if (attrs.isRegularFile) {
-            root.mutChildren.add(
-                OsVirtualFile(
-                    root,
-                    root.path.relativize(file),
-                    myVsfStub
-                )
-            )
+            root.mutChildren.add(OsVirtualFile(myVsfStub.fsLifetime, root, file, myVsfStub))
         } else {
             LOG.warning("Found a leaf that is neither symlink nor file.")
         }

@@ -146,4 +146,16 @@ class PieceTreeTest {
         pieceTree.addCharByCharAndAssertWithPrefix(str, 0)
         assertEquals(str, pieceTree.getLinesRawContent())
     }
+
+    @Test
+    fun `newlines end lines`() {
+        val pieceTree = PieceTreeBuilder().build()
+
+        val line = "val kot = 123\n"
+        val str = "val kot = 123\nval kot = 123\nval kot = 123\nval kot = 123\n"
+        pieceTree.addCharByCharAndAssertWithPrefix(str, 0)
+        for (i in 1..4) {
+            assertEquals(line, pieceTree.getLineContent(i))
+        }
+    }
 }

@@ -15,11 +15,18 @@ fun tickerFlow(period: Long, initDelay: Long = 0) = flow {
     }
 }
 
+fun <T> MutableList<T>.addLifetimed(lifetime: Lifetime, it: T) = lifetime.alsoBracket(
+    { add(it) },
+    { remove(it) }
+)
+
 class Event<T>(
     val id: String,
     private val myLifetime: Lifetime? = null
 ) {
-    init { myLifetime?.alsoOnTerminate { myListeners.clear() } }
+    init {
+        myLifetime?.alsoOnTerminate { myListeners.clear() }
+    }
 
     private val myListeners = mutableListOf<(T) -> Unit>()
 
