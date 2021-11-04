@@ -2,15 +2,9 @@ package ru.hse.hseditor.presentation.states
 
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.utf16CodePoint
-import ru.hse.hseditor.domain.common.Event
 import ru.hse.hseditor.domain.common.lifetimes.Lifetime
-import ru.hse.hseditor.domain.highlights.ExternalModificationDescriptor
 import ru.hse.hseditor.domain.highlights.TextState
-import ru.hse.hseditor.domain.text.PieceTree
-import ru.hse.hseditor.domain.text.PieceTreeBuilder
 import ru.hse.hseditor.presentation.utils.isRelevant
-import kotlin.math.max
-import kotlin.math.min
 
 class EditorState(
     private val myLifetime: Lifetime,

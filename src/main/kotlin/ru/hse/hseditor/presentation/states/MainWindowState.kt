@@ -15,12 +15,14 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
 import org.koin.core.component.KoinComponent
+import ru.hse.hseditor.domain.common.ObservableList
 import ru.hse.hseditor.domain.common.lifetimes.Lifetime
 import ru.hse.hseditor.domain.common.lifetimes.LifetimeDef
 import ru.hse.hseditor.domain.common.lifetimes.defineChildLifetime
 import ru.hse.hseditor.domain.common.locks.runBlockingWrite
 import ru.hse.hseditor.domain.common.vfs.mountVFSAtPathLifetimed
-import ru.hse.hseditor.domain.highlights.ExternalModificationKind
+import ru.hse.hseditor.domain.highlights.ExtModificationDesc
+import ru.hse.hseditor.domain.highlights.ExtModificationKind
 import ru.hse.hseditor.domain.highlights.TextState
 import ru.hse.hseditor.domain.skija.SkijaBuilder
 import ru.hse.hseditor.domain.text.document.DocumentSource
@@ -53,7 +55,7 @@ class MainWindowState(
     val panelState: PanelState by mutableStateOf(PanelState())
     var fileTreeState: FileTreeModel by mutableStateOf(
         FileTreeModel(
-            FileModel("Nothing opened yet!", false, mutableListOf(), false, null),
+            FileModel("Nothing opened yet!", false, ObservableList(), false, null),
             this::openEditor
         )
     )
@@ -107,25 +109,29 @@ class MainWindowState(
         val editorStateDesc = EditorStateDesc(editorState, childLifetimeDef)
 
         editorState.apply {
-            textState.externalModificationEvent.advise(childLifetimeDef.lifetime) {
-                runBlockingWrite { // Can arrive from any thread
-                    when (it.kind) {
-                        ExternalModificationKind.OPEN_DOCUMENT_DISC_SYNC -> mainScope.launch {
-                            when (dialogs.confirmFileUpdateFromDisc.awaitResult()) {
-                                SwingDialogResult.YES ->
-                                    textState.document = file.vfsNode.makeDocumentSuspend() ?: return@launch
-                                else -> {
-                                } // Do nothing here
+            fun handleExternalModification(
+                it: ExtModificationDesc
+            ) = runBlockingWrite { // Can arrive from any thread
+                when (it.kind) {
+                    ExtModificationKind.DOCUMENT_DISC_SYNC -> mainScope.launch {
+                        when (dialogs.confirmFileUpdateFromDisc.awaitResult()) {
+                            SwingDialogResult.YES -> {
+                                textState.document = file.vfsNode.makeDocumentSuspend() ?: return@launch
+                                updateRenderedContent()
                             }
+                            else -> textState.document.isSyncedWithDisc = false
                         }
-                        ExternalModificationKind.DELETED_FROM_DISC -> mainScope.launch {
-                            dialogs.alertFileRemovedFromDisc.awaitResult()
-                            closeEditor(editorStateDesc)
-                        }
+                    }
+                    ExtModificationKind.DOCUMENT_DELETED -> mainScope.launch {
+                        dialogs.alertFileRemovedFromDisc.awaitResult()
+                        closeEditor(editorStateDesc)
                     }
                 }
             }
+
+            textState.externalModificationEvent.advise(childLifetimeDef.lifetime, ::handleExternalModification)
         }
+
         editorStateDescs.add(editorStateDesc)
         activeEditorStateDesc = editorStateDesc
     }

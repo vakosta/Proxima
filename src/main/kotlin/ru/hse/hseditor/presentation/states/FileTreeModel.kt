@@ -3,23 +3,39 @@ package ru.hse.hseditor.presentation.states
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import ru.hse.hseditor.domain.common.vfs.NodeChangeKind
-import ru.hse.hseditor.domain.common.vfs.OsVFSNode
+import ru.hse.hseditor.domain.common.lifetimes.defineLifetime
 import ru.hse.hseditor.presentation.model.FileModel
 
 class ExpandableFile(
     val file: FileModel,
     val level: Int,
 ) {
+
+    // TODO fix lifetime management here.
+
+    private val myLifetimeDef = defineLifetime("ExpandableLifetime")
+
+    init {
+        if (file.hasChildren) {
+            file.children.onNewState.advise(myLifetimeDef.lifetime) {
+                children.forEach { it.myLifetimeDef.terminateLifetime() }
+                children = fileChildrenToExpandableChildren() // Repaint
+            }
+        }
+    }
+
+    private fun fileChildrenToExpandableChildren() = file.children
+        .map { ExpandableFile(it, level + 1) }
+        .sortedWith(compareBy({ it.file.isDirectory }, { it.file.name }))
+        .sortedBy { !it.file.isDirectory }
+
+
     var children: List<ExpandableFile> by mutableStateOf(emptyList())
     val canExpand: Boolean get() = file.hasChildren
 
     fun toggleExpanded() {
         children = if (children.isEmpty()) {
-            file.children
-                .map { ExpandableFile(it, level + 1) }
-                .sortedWith(compareBy({ it.file.isDirectory }, { it.file.name }))
-                .sortedBy { !it.file.isDirectory }
+            fileChildrenToExpandableChildren()
         } else {
             emptyList()
         }

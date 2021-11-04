@@ -1,5 +1,8 @@
 package ru.hse.hseditor.domain.highlights
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import com.lodborg.intervaltree.IntegerInterval
 import com.lodborg.intervaltree.Interval
 import com.lodborg.intervaltree.IntervalTree
@@ -12,23 +15,22 @@ import ru.hse.hseditor.domain.common.TOKEN_COLORS
 import ru.hse.hseditor.domain.highlights.syntaxmanager.KotlinSyntaxManager
 import ru.hse.hseditor.domain.highlights.syntaxmanager.SyntaxManager
 import ru.hse.hseditor.domain.text.document.Document
-import ru.hse.hseditor.presentation.states.EditorState
 import java.util.logging.Level
 import java.util.logging.Logger
 import kotlin.math.max
 import kotlin.math.min
 
-enum class ExternalModificationKind {
-    OPEN_DOCUMENT_DISC_SYNC,
+enum class ExtModificationKind {
+    DOCUMENT_DISC_SYNC,
     /* PSI_MODIFICATION, */
     /* REFORMAT, */
     /* ... etc ... */
 
-    DELETED_FROM_DISC
+    DOCUMENT_DELETED
 }
 
 // May have to attach some more data in the future
-data class ExternalModificationDescriptor(val kind: ExternalModificationKind)
+data class ExtModificationDesc(val kind: ExtModificationKind)
 
 class TextState(
     private val myLifetime: Lifetime,
@@ -37,7 +39,7 @@ class TextState(
     val highlights: IntervalTree<Int> = IntervalTree<Int>(),
 ) {
 
-    val externalModificationEvent = Event<ExternalModificationDescriptor>("TextState::externalModificationEvent")
+    val externalModificationEvent = Event<ExtModificationDesc>("TextState::externalModificationEvent")
 
     init {
         document.textState = this

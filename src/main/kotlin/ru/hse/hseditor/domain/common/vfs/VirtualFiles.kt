@@ -5,8 +5,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.isActive
 import ru.hse.hseditor.domain.common.Event
+import ru.hse.hseditor.domain.common.ObservableSet
 import ru.hse.hseditor.domain.common.lifetimes.Lifetime
 import ru.hse.hseditor.domain.text.FileChunk
 import ru.hse.hseditor.domain.text.PREFERRED_PIECE_TREE_CHUNK_SIZE
@@ -15,22 +15,18 @@ import ru.hse.hseditor.domain.text.document.Document
 import ru.hse.hseditor.domain.text.document.DocumentSource
 import ru.hse.hseditor.domain.text.document.PieceTreeDocument
 import ru.hse.hseditor.domain.text.file.getLineStartOffsetsList
-import java.nio.channels.AsynchronousFileChannel
 import java.nio.charset.Charset
-import java.nio.file.OpenOption
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
-import kotlin.concurrent.thread
 import kotlin.io.path.bufferedReader
 import kotlin.io.path.bufferedWriter
-import kotlin.io.path.writeLines
 
-private val listEmpty = listOf<VFSNode>()
+private val setEmpty = setOf<VFSNode>()
 
 sealed interface VFSNode {
     val fsLifetime: Lifetime
     val parent: VFSNode?
-    val children: List<VFSNode>
+    val children: Set<VFSNode>
 }
 
 sealed interface OsVFSNode : VFSNode {
@@ -63,7 +59,7 @@ class OsVirtualFile(
     override val fileSystem: OsVirtualFileSystem
 ) : OsVFSNode, DocumentSource() {
     override val changedEvent = Event<Unit>("OsVirtualFile::changedEvent")
-    override val children get() = listEmpty
+    override val children get() = setEmpty
 
     override suspend fun makeDocumentSuspend(): Document? {
         parent ?: return null
@@ -102,25 +98,25 @@ class OsVirtualDirectory(
     override val path: Path,
     override val fileSystem: OsVirtualFileSystem
 ) : OsVFSNode {
-    internal val mutChildren = mutableListOf<OsVFSNode>()
+    internal val mutChildren = ObservableSet(mutableSetOf<OsVFSNode>())
     override val changedEvent = Event<Unit>("OsVirtualDirectory::changedEvent")
-    override val children: List<OsVFSNode> get() = mutChildren
+    override val children: Set<OsVFSNode> get() = mutChildren
 
     fun resolveChildNodeOrNull(absolutePath: Path): OsVFSNode? {
         require(absolutePath.isAbsolute) { "Path needs to be absolute!" }
         return children.firstOrNull { absolutePath.startsWith(it.path) }
     }
 
-    val beforeChildAddRemoveEvent = Event<NodeChangingDescriptor>("OsVirtualDirectory::beforeChildAddRemoveEvent")
-
-    fun addChildFiring(toAdd: OsVFSNode) {
-        beforeChildAddRemoveEvent.fire(NodeChangingDescriptor(NodeChangeKind.ADD, toAdd))
-        mutChildren.add(toAdd)
+    fun tryAddChildFiring(toAdd: OsVFSNode): Boolean {
+        if (mutChildren.contains(toAdd)) return false
+        mutChildren.addFiring(toAdd)
+        return true
     }
 
-    fun removeChildFiring(toRemove: OsVFSNode) {
-        beforeChildAddRemoveEvent.fire(NodeChangingDescriptor(NodeChangeKind.REMOVE, toRemove))
-        mutChildren.remove(toRemove)
+    fun removeChildFiring(toRemove: OsVFSNode): Boolean {
+        if (!mutChildren.contains(toRemove)) return false
+        mutChildren.removeFiring(toRemove)
+        return true
     }
 }
 
@@ -131,5 +127,5 @@ class OsVirtualSymlink(
     override val fileSystem: OsVirtualFileSystem
 ) : OsVFSNode {
     override val changedEvent = Event<Unit>("OsVirtualSymlink::changedEvent")
-    override val children get() = listEmpty
+    override val children get() = setEmpty
 }

@@ -38,6 +38,41 @@ class Event<T>(
     }
 }
 
+enum class ChangeKind { ADD, REMOVE }
+
+data class ObservableChange<T>(val kind: ChangeKind, val it: T)
+
+class ObservableSet<T>(private val mySet: MutableSet<T> = mutableSetOf()) : MutableSet<T> by mySet {
+    val addRemove = Event<ObservableChange<T>>("ObservableSet::addRemove")
+
+    fun addFiring(item: T) {
+        addRemove.fire(ObservableChange(ChangeKind.ADD, item))
+        mySet.add(item)
+    }
+
+    fun removeFiring(item: T) {
+        addRemove.fire(ObservableChange(ChangeKind.REMOVE, item))
+        mySet.remove(item)
+    }
+}
+
+class ObservableList<T>(private val myList: MutableList<T> = mutableListOf()) : MutableList<T> by myList {
+    val addRemove = Event<ObservableChange<T>>("ObservableList::addRemove")
+    val onNewState = Event<List<T>>("ObservableList::onNewState")
+
+    fun addFiring(item: T) {
+        addRemove.fire(ObservableChange(ChangeKind.ADD, item))
+        myList.add(item)
+        onNewState.fire(myList)
+    }
+
+    fun removeFiring(item: T) {
+        addRemove.fire(ObservableChange(ChangeKind.REMOVE, item))
+        myList.remove(item)
+        onNewState.fire(myList)
+    }
+}
+
 class Property<T>(
     val id: String,
     initialValue: T,

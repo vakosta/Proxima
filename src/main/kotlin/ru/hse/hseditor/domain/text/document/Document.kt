@@ -1,7 +1,7 @@
 package ru.hse.hseditor.domain.text.document
 
+import ru.hse.hseditor.domain.common.ChangeKind
 import ru.hse.hseditor.domain.common.lifetimes.Lifetime
-import ru.hse.hseditor.domain.common.vfs.NodeChangeKind
 import ru.hse.hseditor.domain.highlights.TextState
 import ru.hse.hseditor.domain.text.PieceTree
 
@@ -32,7 +32,7 @@ interface Document {
     val source: DocumentSource
 }
 
-fun Document.handleChangesFromSource(lifetime: Lifetime, kind: NodeChangeKind) {
+fun Document.handleChangesFromSource(lifetime: Lifetime, kind: ChangeKind) {
     if (isSyncedWithDisc) {
         textState
     } else {

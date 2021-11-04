@@ -1,33 +1,34 @@
 package ru.hse.hseditor.presentation.model
 
+import ru.hse.hseditor.domain.common.ChangeKind
+import ru.hse.hseditor.domain.common.ObservableList
 import ru.hse.hseditor.domain.common.lifetimes.Lifetime
 import ru.hse.hseditor.domain.common.vfs.*
-import ru.hse.hseditor.domain.highlights.ExternalModificationDescriptor
-import ru.hse.hseditor.domain.highlights.ExternalModificationKind
-import ru.hse.hseditor.domain.text.document.Document
+import ru.hse.hseditor.domain.highlights.ExtModificationDesc
+import ru.hse.hseditor.domain.highlights.ExtModificationKind
 import ru.hse.hseditor.domain.text.document.DocumentSource
-import ru.hse.hseditor.domain.text.document.handleChangesFromSource
 import kotlin.io.path.name
 
 private fun FileModel.adviseDirectoryEvents(lifetime: Lifetime, dir: OsVirtualDirectory) {
-    dir.beforeChildAddRemoveEvent.advise(lifetime) { desc ->
-        when (desc.kind) {
-            NodeChangeKind.ADD -> children.add(desc.node.toFileModelLifetimed(lifetime))
-            NodeChangeKind.REMOVE -> {
-                val childFileModel = children.firstOrNull { it.vfsNode == desc.node }
+    dir.mutChildren.addRemove.advise(lifetime) { event ->
+        when (event.kind) {
+            ChangeKind.ADD -> children.addFiring(event.it.toFileModelLifetimed(lifetime))
+            ChangeKind.REMOVE -> {
+                val childFileModel = children.firstOrNull { it.vfsNode == event.it }
                 require(childFileModel != null) { "Must be a child! (event dispatch is broken)" }
                 val documentSource = childFileModel.vfsNode as? DocumentSource
 
                 documentSource?.openedDocuments?.forEach {
                     it.textState.externalModificationEvent.fire(
-                        ExternalModificationDescriptor(ExternalModificationKind.DELETED_FROM_DISC)
+                        ExtModificationDesc(ExtModificationKind.DOCUMENT_DELETED)
                     )
                 }
 
-                children.remove()
+                children.removeFiring(childFileModel)
             }
         }
     }
+
     dir.changedEvent.advise(lifetime) {
         name = dir.path.name
     }
@@ -35,33 +36,39 @@ private fun FileModel.adviseDirectoryEvents(lifetime: Lifetime, dir: OsVirtualDi
 
 private fun FileModel.adviseFileEvents(lifetime: Lifetime, file: OsVirtualFile) {
     file.changedEvent.advise(lifetime) {
-        file.openedDocuments.forEach {
+        file.openedDocuments.forEach { it.textState.externalModificationEvent.fire(
+            ExtModificationDesc(ExtModificationKind.DOCUMENT_DISC_SYNC)
+        ) }
+    }
+}
 
-        }
+private fun FileModel.adviseSymlinkEvents(lifetime: Lifetime, symlink: OsVirtualSymlink) {
+    symlink.changedEvent.advise(lifetime) {
+        this.name = symlink.path.fileName.name
     }
 }
 
 fun OsVFSNode.toFileModelLifetimed(lifetime: Lifetime): FileModel = FileModel(
     path.name,
     this is OsVirtualDirectory,
-    (this as? OsVirtualDirectory)?.children?.map { it.toFileModelLifetimed(lifetime) }?.toMutableList()
-        ?: mutableListOf(),
+    (this as? OsVirtualDirectory)?.children
+        ?.map { it.toFileModelLifetimed(lifetime) }
+        ?.toMutableList()?.let { ObservableList(it) }
+        ?: ObservableList(),
     this is OsVirtualDirectory,
     this
 ).apply {
-    val osVFSNode = vfsNode as? OsVFSNode
-    when (osVFSNode) {
+    when (val osVFSNode = vfsNode as? OsVFSNode) {
         is OsVirtualDirectory -> adviseDirectoryEvents(lifetime, osVFSNode)
         is OsVirtualFile -> adviseFileEvents(lifetime, osVFSNode)
-        is OsVirtualSymlink -> TODO()
-        null -> TODO()
+        is OsVirtualSymlink -> adviseSymlinkEvents(lifetime, osVFSNode)
     }
 }
 
 class FileModel(
     var name: String,
     val isDirectory: Boolean,
-    val children: MutableList<FileModel>,
+    val children: ObservableList<FileModel>,
     val hasChildren: Boolean,
     val vfsNode: VFSNode?
 )

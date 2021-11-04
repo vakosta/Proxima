@@ -42,7 +42,7 @@ fun runBlockingWrite(block: () -> Unit, canExecuteBlock: (() -> Boolean)? = null
         for (action in interruptedActions) {
             action.lifetime.scopedLaunch { action.execute() }
         }
-        LocksGate.letGoWriteActionLock(writeAction)
+        LocksGate.letGoWriteActionLock()
     }
 }
 

@@ -53,7 +53,7 @@ internal object LocksGate {
         return interruptedActions
     }
 
-    suspend fun letGoWriteActionLock(writeAction: WriteAction) {
+    suspend fun letGoWriteActionLock() {
         myDispatchMutex.withLock {
             myOngoingWriteAction = null
         }
