@@ -36,3 +36,21 @@ fun Modifier.cursorForHorizontalResize(): Modifier = composed {
         )
     )
 }
+
+@OptIn(ExperimentalComposeUiApi::class)
+fun Modifier.cursorForText(): Modifier = composed {
+    var isHover by remember { mutableStateOf(false) }
+
+    pointerMoveFilter(
+        onEnter = { isHover = true; true },
+        onExit = { isHover = false; true }
+    ).pointerIcon(
+        PointerIcon(
+            if (isHover) {
+                Cursor(Cursor.TEXT_CURSOR)
+            } else {
+                Cursor.getDefaultCursor()
+            }
+        )
+    )
+}

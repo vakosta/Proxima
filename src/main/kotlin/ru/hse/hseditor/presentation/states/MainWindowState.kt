@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.mouse.MouseScrollUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowPosition
@@ -48,9 +49,11 @@ class MainWindowState(
     val dialogs = DialogsController()
     val mainScope = MainScope()
 
-    var renderedContent: ImageBitmap by mutableStateOf(
-        SkijaBuilder("", 0, true, 300, 300).buildView()
-    )
+    private var cursorX = 0F
+    private var cursorY = 0F
+    private var cursorState: MouseEvent = MouseEvent.RELEASE
+
+    var renderedContent: ImageBitmap by mutableStateOf(SkijaBuilder().build())
 
     val panelState: PanelState by mutableStateOf(PanelState())
     var fileTreeState: FileTreeModel by mutableStateOf(
@@ -159,6 +162,27 @@ class MainWindowState(
         return true
     }
 
+    fun onPointChangeState(event: MouseEvent) {
+        if (event == MouseEvent.PRESS) {
+            activeEditorState?.textState?.clearSelectionPositions()
+        }
+        cursorState = event
+        updateCaretPosition()
+    }
+
+    fun onPointMove(x: Float, y: Float) {
+        cursorX = x
+        cursorY = y
+        if (cursorState == MouseEvent.PRESS) {
+            updateCaretPosition()
+        }
+    }
+
+    fun onScroll(mouseScrollUnit: MouseScrollUnit.Line) {
+        activeEditorState?.setVerticalOffset(mouseScrollUnit.value * 20, renderedContent.height)
+        updateRenderedContent()
+    }
+
     fun updateRenderedContent(width: Int = renderedContent.width, height: Int = renderedContent.height) {
         // TODO: Start at EditorRange() and end at EditorRange(), will be faster
         val editorDesc = activeEditorStateDesc ?: return
@@ -166,9 +190,11 @@ class MainWindowState(
             content = editorDesc.editorState.textState.document.getRawContent(),
             carriagePosition = editorDesc.editorState.textState.carriageAbsoluteOffset,
             isShowCarriage = isShowCarriage,
+            verticalScrollOffset = editor.verticalOffset,
+            horizontalScrollOffset = editor.horizontalOffset,
             width = width,
             height = height,
-            textState = editorDesc.editorState.textState,
+            textState = editor.textState,
         ).buildView()
     }
 

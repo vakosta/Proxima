@@ -93,9 +93,10 @@ fun MainWindow(state: MainWindowState, onCloseRequest: () -> Unit) = Window(
             CodeView(
                 isVisible = state.editorStateDescs.isNotEmpty(),
                 code = state.renderedContent,
-                onGloballyPositioned = {
-                    state.updateRenderedContent(it.size.width, it.size.height)
-                }
+                onPointMove = state::onPointMove,
+                onPointChangeState = state::onPointChangeState,
+                onScroll = state::onScroll,
+                onGloballyPositioned = { state.updateRenderedContent(it.size.width, it.size.height) }
             )
         }
     }
