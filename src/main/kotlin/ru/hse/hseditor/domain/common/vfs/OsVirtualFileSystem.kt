@@ -227,7 +227,7 @@ class OsVirtualFileSystem internal constructor(
     fun resolveFileAbsoluteOrNull(path: Path) = resolveNodeAbsoluteOrNull(path) as? OsVirtualFile
     fun resolveDirAbsoluteOrNull(path: Path) = resolveNodeAbsoluteOrNull(path) as? OsVirtualDirectory
 
-    fun makeDirectory(absoluteAt: Path, absoluteDir: Path): OsVFSNode {
+    fun makeDirectory(absoluteAt: Path, absoluteDir: Path): OsVirtualDirectory {
         require(absoluteAt.isAbsolute && absoluteDir.isAbsolute) {
             "Some path is not absolute!"
         }
@@ -240,7 +240,7 @@ class OsVirtualFileSystem internal constructor(
         return directory
     }
 
-    fun makeFile(absoluteAt: Path, absoluteFile: Path): OsVFSNode {
+    fun makeFile(absoluteAt: Path, absoluteFile: Path): OsVirtualFile {
         require(absoluteAt.isAbsolute && absoluteFile.isAbsolute) {
             "Some path is not absolute!"
         }
@@ -253,7 +253,7 @@ class OsVirtualFileSystem internal constructor(
         return virtualFile
     }
 
-    fun makeSymlink(absoluteAt: Path, absoluteSymlink: Path): OsVFSNode {
+    fun makeSymlink(absoluteAt: Path, absoluteSymlink: Path): OsVirtualSymlink {
         require(absoluteAt.isAbsolute && absoluteSymlink.isAbsolute) {
             "Some path is not absolute!"
         }

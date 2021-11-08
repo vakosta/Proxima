@@ -61,11 +61,10 @@ class OsVirtualFile(
     override val changedEvent = Event<Unit>("OsVirtualFile::changedEvent")
     override val children get() = setEmpty
 
-    override suspend fun makeDocumentSuspend(): Document? {
-        parent ?: return null
+    override suspend fun makeDocument(): Document {
         val scope = CoroutineScope(Dispatchers.IO)
         val pieceTreeBuilder = PieceTreeBuilder()
-        fetchFileChunksFlow(parent.path.resolve(path))
+        fetchFileChunksFlow(parent?.path?.resolve(path) ?: path)
             .map { pieceTreeBuilder.acceptFileChunk(it) }
             .launchIn(scope).join()
 
@@ -74,7 +73,7 @@ class OsVirtualFile(
         return document
     }
 
-    override fun commitDocument(document: Document) {
+    override suspend fun rememberOpenedDocument(document: Document) {
         require(document in openedDocuments) { "Document from some other source cannot be commited" }
         // TODO we can do diffs here, but it would probably require some sort of
         // TODO file indexing, so... no diffs, many excess calculations!
@@ -85,10 +84,29 @@ class OsVirtualFile(
         ).use { br ->
             document.lines().forEach { br.write(it) }
         }
+
+        // Handle sync
+        // TODO more sophisticated sync handling???
+        openedDocuments.forEach { if (it != document) document.isSyncedWithDisc = false }
+        document.isSyncedWithDisc = true
     }
 
-    override fun refreshDocument(document: Document) {
+    override suspend fun refreshOpenedDocument(document: Document) {
+        require(document in openedDocuments) { "Document from some other source cannot be commited" }
+        document.textState.document = makeDocument()
 
+        // Handle sync
+        document.isSyncedWithDisc = true
+    }
+
+    override suspend fun rememberExternalDocument(document: Document) {
+        fileSystem.absoluteRootPath.resolve(path).bufferedWriter(
+            Charset.defaultCharset(),
+            32,
+            StandardOpenOption.TRUNCATE_EXISTING
+        ).use { br ->
+            document.lines().forEach { br.write(it) }
+        }
     }
 }
 

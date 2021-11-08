@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import ru.hse.hseditor.domain.common.lifetimes.defineLifetime
+import ru.hse.hseditor.domain.common.vfs.VFSNode
 import ru.hse.hseditor.presentation.model.FileModel
 
 class ExpandableFile(
@@ -90,4 +91,14 @@ class FileTreeModel(
         return list
     }
 
+}
+
+fun FileTreeModel.findByVfsNode(node: VFSNode) = findByVfsNodeRec(root, node)
+
+// Depth-first traversal (SUBOPTIMAL)
+private fun findByVfsNodeRec(file: FileModel, node: VFSNode): FileModel? {
+    if (file.vfsNode == node) return file
+    if (!file.hasChildren) return null
+
+    return file.children.map { findByVfsNodeRec(it, node) }.firstNotNullOfOrNull { it }
 }

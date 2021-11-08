@@ -11,11 +11,6 @@ import javax.swing.SwingUtilities
 import javax.swing.UIManager
 import kotlin.system.exitProcess
 
-fun gracefulShutdown() {
-    // Not so graceful for now
-    exitProcess(0)
-}
-
 fun main() {
     // Some dark Swing magic
     SwingUtilities.invokeLater { UIManager.setLookAndFeel(UIManager.getCrossPlatformLookAndFeelClassName()) }
@@ -29,14 +24,13 @@ fun main() {
     val mainWindowLifetimeDef = defineLifetime("MainWindow Lifetime")
 
     application {
-        val state = MainWindowState(mainWindowLifetimeDef.lifetime)
+        val state = MainWindowState(mainWindowLifetimeDef.lifetime, onCloseRequest = {
+            mainWindowLifetimeDef.terminateLifetime()
+            exitApplication()
+            exitProcess(0)
+        })
         MainWindow(
-            state = state,
-            onCloseRequest = {
-                mainWindowLifetimeDef.terminateLifetime()
-                exitApplication()
-                gracefulShutdown()
-            }
+            state = state
         )
     }
 }

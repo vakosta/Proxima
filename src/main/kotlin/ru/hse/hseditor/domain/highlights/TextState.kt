@@ -59,13 +59,14 @@ class TextState(
 
     private val currentLine: String
         get() {
-            val output = pieceTree.getLineContent(carriageLine + 1)
+            val output = document.getLineContent(caretLine + 1)
             return try {
                 output.substring(0, output.indexOfFirst { it == '\n' })
             } catch (e: StringIndexOutOfBoundsException) {
                 output
             }
         }
+
     var caretAbsoluteOffset = 0
         private set
     var caretLine = 0
@@ -111,7 +112,7 @@ class TextState(
     }
 
     fun onPressedDownArrow(withSelection: Boolean) {
-        if (caretLine != pieceTree.lineCount - 1) {
+        if (caretLine != document.lineCount - 1) {
             val currentLineOffset = currentLine.length - caretLineOffset
             caretLine++
             val nextLineOffset = min(caretLineOffset, currentLine.length)
@@ -119,7 +120,7 @@ class TextState(
             caretAbsoluteOffset += excessCharNumber + 1
             caretLineOffset = min(caretLineOffset, currentLine.length)
         } else {
-            caretAbsoluteOffset = pieceTree.textLength
+            caretAbsoluteOffset = document.textLength
             caretLineOffset = currentLine.length
         }
         updateSelection(withSelection)
@@ -139,8 +140,8 @@ class TextState(
     }
 
     fun onPressedRightArrow(withSelection: Boolean) {
-        caretAbsoluteOffset = min(caretAbsoluteOffset + 1, pieceTree.textLength)
-        if (caretLineOffset == currentLine.length && caretLine < pieceTree.lineCount - 1) {
+        caretAbsoluteOffset = min(caretAbsoluteOffset + 1, document.textLength)
+        if (caretLineOffset == currentLine.length && caretLine < document.lineCount - 1) {
             caretLine++
             caretLineOffset = 0
         } else if (caretLineOffset != currentLine.length) {
@@ -151,19 +152,19 @@ class TextState(
     }
 
     fun onPressedBackspace() {
-        document.deleteCharAfter(carriageAbsoluteOffset - 1)
+        document.deleteCharAfter(caretAbsoluteOffset - 1)
         updateCurrentLineHighlights(-1)
         onPressedLeftArrow(false)
     }
 
     fun onTypedChar(char: Char) {
-        document.insert(char.toString(), carriageAbsoluteOffset)
+        document.insert(char.toString(), caretAbsoluteOffset)
         updateCurrentLineHighlights(1)
         onPressedRightArrow(false)
     }
 
     fun onAddText(text: String) {
-        pieceTree.insert(text, caretAbsoluteOffset, true)
+        document.insert(text, caretAbsoluteOffset)
         updateCurrentLineHighlights(text.length)
         for (i in text.indices) { // FIXME: Slow iterator
             onPressedRightArrow(false)
@@ -222,12 +223,9 @@ class TextState(
         }
     }
 
-
-    fun getCharColor(position: Int): Int {
-        val color: Int = getHighlights(position).firstOrNull { it.params.color != null }?.params?.color ?: COLOR_BLACK
-        return color
-    }
-
+    // thisisvolatile: this is weird, but we have
+    // to roll with an external interval tree impl
+    @Suppress("UNCHECKED_CAST")
     private fun getHighlights(position: Int): Set<HighlightInterval> =
         highlights.query(position) as Set<HighlightInterval>
 

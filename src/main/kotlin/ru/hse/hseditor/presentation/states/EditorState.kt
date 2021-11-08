@@ -8,6 +8,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.utf16CodePoint
 import org.koin.core.component.KoinComponent
 import ru.hse.hseditor.data.CharCoordinates
+import ru.hse.hseditor.domain.common.lifetimes.Lifetime
 import ru.hse.hseditor.domain.highlights.TextState
 import ru.hse.hseditor.presentation.utils.isRelevant
 import java.awt.Toolkit

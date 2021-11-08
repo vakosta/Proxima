@@ -32,6 +32,7 @@ import androidx.compose.ui.window.FrameWindowScope
 import androidx.compose.ui.window.MenuBar
 import androidx.compose.ui.window.Window
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import ru.hse.hseditor.presentation.states.MainWindowState
 import ru.hse.hseditor.presentation.states.PanelState
 import ru.hse.hseditor.presentation.utils.VerticalSplittable
@@ -42,14 +43,16 @@ import ru.hse.hseditor.presentation.views.dialogs.SwingFileDialog
 import ru.hse.hseditor.presentation.views.dialogs.SwingFileDialogKind
 import ru.hse.hseditor.presentation.views.dialogs.SwingAlertDialog
 import ru.hse.hseditor.presentation.views.dialogs.SwingConfirmDialog
+import java.net.CacheRequest
 import javax.swing.JFileChooser
 import kotlin.io.path.isDirectory
+import kotlin.io.path.isRegularFile
 
 @Composable
-fun MainWindow(state: MainWindowState, onCloseRequest: () -> Unit) = Window(
+fun MainWindow(state: MainWindowState) = Window(
     title = "HSEditor",
     state = state,
-    onCloseRequest = onCloseRequest,
+    onCloseRequest = { runBlocking { state.interruptableExit() } },
     onKeyEvent = { state.onKeyEvent(it) }
 ) {
     val animatedSize = if (state.panelState.splitter.isResizing) {
@@ -101,6 +104,8 @@ fun MainWindow(state: MainWindowState, onCloseRequest: () -> Unit) = Window(
         }
     }
 
+    //region Dialogs
+
     if (state.dialogs.openDirectory.isAwaiting) {
         SwingFileDialog(
             "Open directory...",
@@ -129,21 +134,74 @@ fun MainWindow(state: MainWindowState, onCloseRequest: () -> Unit) = Window(
             onOptionChosen = { state.dialogs.alertFileRemovedFromDisc.onResult(it) }
         )
     }
+
+    if (state.dialogs.cantMakeFile.isAwaiting) {
+        SwingAlertDialog(
+            "Can't make a file!",
+            "Can't make a virtual file with a specified path!",
+            onOptionChosen = { state.dialogs.cantMakeFile.onResult(it) }
+        )
+    }
+
+    if (state.dialogs.confirmExit.isAwaiting) {
+        SwingConfirmDialog(
+            "Exit",
+            "Do you really want to exit?",
+            onOptionChosen = { state.dialogs.confirmExit.onResult(it) }
+        )
+    }
+
+    if (state.dialogs.chooseFilePath.isAwaiting) {
+        SwingFileDialog(
+            "Open a file...",
+            SwingFileDialogKind.OPEN,
+            onPathChosen = {
+                state.dialogs.chooseFilePath.onResult(it)
+            },
+            fileSelectionModeInt = JFileChooser.FILES_AND_DIRECTORIES
+        )
+    }
+
+    if (state.dialogs.illegalPath.isAwaiting) {
+        SwingAlertDialog(
+            "Illegal path",
+            "The chosen path is illegal for a file! Please, choose a file!",
+            onOptionChosen = { state.dialogs.illegalPath.onResult(it) }
+        )
+    }
+
+    if (state.dialogs.pathNotMounted.isAwaiting) {
+        SwingAlertDialog(
+            "Path not mounted",
+            "Path is not in the project model, can't create a file. " +
+                    "The author didn't want to add support for external virtual files. What a bummer.",
+            onOptionChosen = { state.dialogs.pathNotMounted.onResult(it) }
+        )
+    }
+
+    //endregion
+
 }
+
 @Composable
 private fun FrameWindowScope.MainWindowMenuBar(state: MainWindowState) = MenuBar {
     val scope = rememberCoroutineScope()
 
-    fun save() = scope.launch { /* save current document */ }
+    fun save() = scope.launch { state.saveActiveEditor() }
+    fun saveAs() = scope.launch { state.saveActiveEditorAs() }
+
     fun openDirectory() = scope.launch { state.openDirectory() }
-    fun exit() = Unit
+    fun exit() = scope.launch { state.interruptableExit() }
+
+    fun newTab() = scope.launch { state.createSourceAndOpenDocument() }
 
     Menu("File") {
-        Item("New tab", onClick = {})
+        Item("New file with tab", onClick = { newTab() })
         Item("Open folder...", onClick = { openDirectory() })
-        Item("Save", onClick = {})
+        Item("Save", onClick = { save() })
+        Item("Save as...", onClick = { saveAs() })
         Separator()
-        Item("Exit", onClick = {})
+        Item("Exit", onClick = { exit() })
     }
 }
 

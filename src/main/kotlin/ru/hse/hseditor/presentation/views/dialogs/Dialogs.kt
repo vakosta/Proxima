@@ -63,7 +63,7 @@ fun FrameWindowScope.SwingConfirmDialog(
     DisposableEffect(Unit) {
         val job = GlobalScope.launch(Dispatchers.Swing) {
             val resultInt = JOptionPane.showConfirmDialog(
-                window, message, title, JOptionPane.YES_NO_CANCEL_OPTION
+                window, message, title, JOptionPane.YES_NO_OPTION
             )
             val result = when (resultInt) {
                 JOptionPane.YES_OPTION -> SwingDialogResult.YES

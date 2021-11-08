@@ -5,7 +5,7 @@ import kotlin.test.assertEquals
 
 class PieceTreeTest {
 
-    private fun PieceTree.addCharByCharAndAssertWithPrefix(str: String, atOffset: Int, prefix: String = "") {
+    private fun PieceTree.addCharByCharAndAssertWithPrefix(str: String, atOffset: Int, prefix: String = this.getLinesRawContent().slice(0 until atOffset)) {
         val resBuilder = StringBuilder().apply { append(prefix) }
 
         for (i in str.indices) {
@@ -157,5 +157,31 @@ class PieceTreeTest {
         for (i in 1..4) {
             assertEquals(line, pieceTree.getLineContent(i))
         }
+    }
+
+    @Test
+    fun `stdio bug`() {
+        val pieceTree = PieceTreeBuilder().build()
+
+        pieceTree.addCharByCharAndAssertWithPrefix("#include <>", 0)
+
+        var offset = 10
+        for (ch in "std") {
+            pieceTree.insert(ch.toString(), offset)
+            offset += 1
+        }
+        println(pieceTree.getLinesRawContent())
+        pieceTree.deleteBefore(offset)
+        offset -= 1
+
+        val sb = StringBuilder().apply { append(pieceTree.getLinesRawContent()) }
+        for (ch in "dio.h") {
+            pieceTree.insert(ch.toString(), offset)
+            sb.insert(offset, ch)
+            assertEquals(sb.toString(), pieceTree.getLinesRawContent())
+            offset += 1
+        }
+
+        println(pieceTree.getLinesRawContent())
     }
 }

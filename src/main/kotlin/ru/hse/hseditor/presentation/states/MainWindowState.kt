@@ -21,6 +21,8 @@ import ru.hse.hseditor.domain.common.lifetimes.Lifetime
 import ru.hse.hseditor.domain.common.lifetimes.LifetimeDef
 import ru.hse.hseditor.domain.common.lifetimes.defineChildLifetime
 import ru.hse.hseditor.domain.common.locks.runBlockingWrite
+import ru.hse.hseditor.domain.common.vfs.OsVirtualFile
+import ru.hse.hseditor.domain.common.vfs.OsVirtualFileSystem
 import ru.hse.hseditor.domain.common.vfs.mountVFSAtPathLifetimed
 import ru.hse.hseditor.domain.highlights.ExtModificationDesc
 import ru.hse.hseditor.domain.highlights.ExtModificationKind
@@ -29,12 +31,17 @@ import ru.hse.hseditor.domain.skija.SkijaBuilder
 import ru.hse.hseditor.domain.text.document.DocumentSource
 import ru.hse.hseditor.presentation.model.FileModel
 import ru.hse.hseditor.presentation.model.toFileModelLifetimed
+import ru.hse.hseditor.presentation.views.MouseEvent
 import ru.hse.hseditor.presentation.views.dialogs.SwingDialogResult
 import java.nio.file.Path
 import java.time.Duration
 import java.time.Instant
 import java.util.logging.Logger
 import kotlin.io.path.absolute
+import kotlin.io.path.isRegularFile
+import kotlin.math.min
+import kotlin.math.max
+import kotlin.system.exitProcess
 
 data class EditorStateDesc(val editorState: EditorState, val editorLifetimeDef: LifetimeDef)
 
@@ -44,6 +51,7 @@ class MainWindowState(
     override var isMinimized: Boolean = false,
     override var position: WindowPosition = WindowPosition.PlatformDefault,
     override var size: WindowSize = WindowSize(800.dp, 600.dp),
+    private val onCloseRequest: () -> Unit
 ) : KoinComponent, WindowState {
 
     val dialogs = DialogsController()
@@ -87,10 +95,14 @@ class MainWindowState(
         }
     }
 
+    private var myVfs: OsVirtualFileSystem? = null
+
     suspend fun openDirectory() {
         val dirPath = dialogs.openDirectory.awaitResult() ?: return
         fileTreeState = FileTreeModel(
-            mountVFSAtPathLifetimed(myLifetime, dirPath.absolute()).root.toFileModelLifetimed(myLifetime),
+            mountVFSAtPathLifetimed(myLifetime, dirPath.absolute())
+                .apply { myVfs = this }
+                .root.toFileModelLifetimed(myVfs?.fsLifetime ?: myLifetime),
             this::openEditor
         )
     }
@@ -106,12 +118,13 @@ class MainWindowState(
             textState = TextState(
                 myLifetime = childLifetimeDef.lifetime,
                 language = TextState.Language.Kotlin,
-                document = file.vfsNode.makeDocumentSuspend() ?: return,
+                document = file.vfsNode.makeDocument() ?: return,
             )
         )
         val editorStateDesc = EditorStateDesc(editorState, childLifetimeDef)
 
         editorState.apply {
+
             fun handleExternalModification(
                 it: ExtModificationDesc
             ) = runBlockingWrite { // Can arrive from any thread
@@ -119,7 +132,7 @@ class MainWindowState(
                     ExtModificationKind.DOCUMENT_DISC_SYNC -> mainScope.launch {
                         when (dialogs.confirmFileUpdateFromDisc.awaitResult()) {
                             SwingDialogResult.YES -> {
-                                textState.document = file.vfsNode.makeDocumentSuspend() ?: return@launch
+                                textState.document.updateFromSource()
                                 updateRenderedContent()
                             }
                             else -> textState.document.isSyncedWithDisc = false
@@ -127,7 +140,7 @@ class MainWindowState(
                     }
                     ExtModificationKind.DOCUMENT_DELETED -> mainScope.launch {
                         dialogs.alertFileRemovedFromDisc.awaitResult()
-                        closeEditor(editorStateDesc)
+                        textState.document.isSyncedWithDisc = false
                     }
                 }
             }
@@ -164,7 +177,7 @@ class MainWindowState(
 
     fun onPointChangeState(event: MouseEvent) {
         if (event == MouseEvent.PRESS) {
-            activeEditorState?.textState?.clearSelectionPositions()
+            activeEditorStateDesc?.editorState?.textState?.clearSelectionPositions()
         }
         cursorState = event
         updateCaretPosition()
@@ -179,32 +192,116 @@ class MainWindowState(
     }
 
     fun onScroll(mouseScrollUnit: MouseScrollUnit.Line) {
-        activeEditorState?.setVerticalOffset(mouseScrollUnit.value * 20, renderedContent.height)
+        activeEditorStateDesc?.editorState?.setVerticalOffset(mouseScrollUnit.value * 20, renderedContent.height)
         updateRenderedContent()
     }
 
-    fun updateRenderedContent(width: Int = renderedContent.width, height: Int = renderedContent.height) {
-        // TODO: Start at EditorRange() and end at EditorRange(), will be faster
-        val editorDesc = activeEditorStateDesc ?: return
-        renderedContent = SkijaBuilder(
-            content = editorDesc.editorState.textState.document.getRawContent(),
-            carriagePosition = editorDesc.editorState.textState.carriageAbsoluteOffset,
-            isShowCarriage = isShowCarriage,
-            verticalScrollOffset = editor.verticalOffset,
-            horizontalScrollOffset = editor.horizontalOffset,
-            width = width,
-            height = height,
-            textState = editor.textState,
-        ).buildView()
-    }
+    fun updateRenderedContent(width: Int = renderedContent.width, height: Int = renderedContent.height) =
+        synchronized(this) {
+            // TODO: Start at EditorRange() and end at EditorRange(), will be faster
+            val editorDesc = activeEditorStateDesc ?: return
+            editorStateDescs.forEach { it.editorState.setVerticalOffset(0F, height) }
+            val skijaBuilder = SkijaBuilder(
+                content = editorDesc.editorState.textState.document.getRawContent(),
+                caretPosition = editorDesc.editorState.textState.caretAbsoluteOffset,
+                isShowCarriage = isShowCarriage,
+                verticalScrollOffset = editorDesc.editorState.verticalOffset,
+                horizontalScrollOffset = editorDesc.editorState.horizontalOffset,
+                width = width,
+                height = height,
+                textState = editorDesc.editorState.textState,
+                startSelectionPosition = min(
+                    editorDesc.editorState.textState.firstSelectionPosition ?: -1,
+                    editorDesc.editorState.textState.secondSelectionPosition ?: -1,
+                ),
+                endSelectionPosition = if (editorDesc.editorState.textState.secondSelectionPosition == null) {
+                    -1
+                } else {
+                    max(
+                        editorDesc.editorState.textState.firstSelectionPosition ?: -1,
+                        editorDesc.editorState.textState.secondSelectionPosition ?: -1,
+                    )
+                },
+            )
+            renderedContent = skijaBuilder.build()
+            editorDesc.editorState.maxTextX = skijaBuilder.maxTextX
+            editorDesc.editorState.maxTextY = skijaBuilder.maxTextY
+            editorDesc.editorState.charCoordinates = skijaBuilder.charCoordinates
+        }
 
     companion object {
         val LOG = Logger.getLogger(MainWindowState::class.java.name)
     }
+
+    private fun updateCaretPosition() {
+        activeEditorStateDesc?.editorState?.updateCaretPosition(cursorX, cursorY) ?: return
+        typingTime = Instant.now()
+        isShowCarriage = true
+        updateRenderedContent()
+    }
+
+    suspend fun saveActiveEditor() {
+        val document = activeEditorStateDesc?.editorState?.textState?.document ?: return
+        if (document.source != null) {
+            document.writeToMainSource()
+        } else {
+            saveActiveEditorAs()
+        }
+    }
+
+    private suspend fun makeNewVFile(): OsVirtualFile? {
+        val path = dialogs.chooseFilePath.awaitResult()?.toAbsolutePath()
+        if (path == null || path.parent == null || !path.isRegularFile()) {
+            dialogs.illegalPath.awaitResult()
+            return null
+        }
+        val directory = myVfs?.resolveDirAbsoluteOrNull(path.parent)
+        if (directory == null) {
+            dialogs.pathNotMounted.awaitResult()
+            return null
+        }
+        val vFile = myVfs?.makeFile(directory.path, path)
+        if (vFile == null) {
+            dialogs.cantMakeFile.awaitResult()
+            return null
+        }
+        return vFile
+    }
+
+    suspend fun saveActiveEditorAs() {
+        val document = activeEditorStateDesc?.editorState?.textState?.document ?: return
+        val vFile = makeNewVFile() ?: return
+
+        document.writeToSecondarySource(vFile)
+    }
+
+    suspend fun interruptableExit() {
+        val result = dialogs.confirmExit.awaitResult()
+        if (result == SwingDialogResult.YES) {
+            onCloseRequest()
+            exitProcess(0)
+        }
+    }
+
+    suspend fun createSourceAndOpenDocument() {
+        val vFile = makeNewVFile() ?: return
+        // Must be created by the power of ~REACTIVE~ programming after making a VFile
+        val fileModel = fileTreeState.findByVfsNode(vFile) ?: return
+
+        openEditor(fileModel)
+    }
+
 }
 
 class DialogsController {
+    val confirmExit = DialogState<SwingDialogResult>()
+    val illegalPath = DialogState<SwingDialogResult>()
+    val pathNotMounted = DialogState<SwingDialogResult>()
+    val cantMakeFile = DialogState<SwingDialogResult>()
+
     val openDirectory = DialogState<Path?>()
+    val chooseFilePath = DialogState<Path?>()
+
     val confirmFileUpdateFromDisc = DialogState<SwingDialogResult>()
     val alertFileRemovedFromDisc = DialogState<SwingDialogResult>()
 }
