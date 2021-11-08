@@ -2,6 +2,7 @@ package ru.hse.hseditor.domain.text
 
 import ru.hse.hseditor.domain.text.document.EditorRange
 import ru.hse.hseditor.domain.text.file.getLineStartOffsetsList
+import java.util.logging.Logger
 
 // TODO @thisisvolatile maybe do a refactoring of the internal API?
 // TODO Fix max modifiable chars?
@@ -83,7 +84,11 @@ internal data class Piece(
     val chunkEndPos: ChunkLFOffset,
     val lineFeeds: Int,
     val textLen: Int
-)
+) {
+    fun requireValid() {
+        require(chunkDesc.bufferIndex >= 1)
+    }
+}
 
 //endregion
 
@@ -185,7 +190,7 @@ internal class PieceTreeNode(
 
     override fun toString(): String =
         "Piece buffer: (${piece.chunkDesc.bufferKind},${piece.chunkDesc.bufferIndex}) colored $color" +
-                "\nStarts at (${piece.chunkStartPos.lineFeedsNo},${piece.chunkStartPos.charsAfterLastLF}), " +
+                "\n[CHUNK] Starts at (${piece.chunkStartPos.lineFeedsNo},${piece.chunkStartPos.charsAfterLastLF}), " +
                 "ends at (${piece.chunkEndPos.lineFeedsNo},${piece.chunkEndPos.charsAfterLastLF})"
 }
 
@@ -228,7 +233,7 @@ internal class PieceTreeSearchCache(
     }
 
     fun addEntry(entry: PieceTreeSearchCacheEntry) {
-        if (myCache.size >= myLimit) {
+        if (myCache.isNotEmpty() && myCache.size >= myLimit) {
             myCache.removeFirst()
         }
         myCache.add(entry)
@@ -238,15 +243,39 @@ internal class PieceTreeSearchCache(
      * Validates the cache to have no "dead" entries at offset.
      */
     fun validate(offset: Int) {
+        LOG.info("[VALIDATE] Started for offset $offset...")
         val tmp = mutableListOf<PieceTreeSearchCacheEntry>()
         for (i in myCache.indices) {
             val entry = myCache[i]
+            LOG.info("[VALIDATE] Keep? ${if (entry.nodeStartOffset < offset) "YES" else "NO"}")
             if (entry.nodeStartOffset < offset) {
+                LOG.info("[VALIDATE] Kept entry with StartOffset: ${entry.nodeStartOffset} LineOffset: ${entry.nodeStartLineNumber}")
                 tmp.add(entry)
             }
         }
 
         myCache = tmp
+    }
+
+    fun modifyOffsetsAfter(offset: Int, deltaAbsolute: Int, deltaLf: Int = 0) {
+        for (i in myCache.indices) {
+            val entry = myCache[i]
+            if (entry.nodeStartOffset >= offset) {
+                myCache[i] = PieceTreeSearchCacheEntry(
+                    entry.node,
+                    entry.nodeStartOffset + deltaAbsolute,
+                    if (entry.nodeStartLineNumber != null) {
+                        entry.nodeStartLineNumber + deltaLf
+                    } else null
+                )
+            }
+        }
+    }
+
+    fun invalidate() = myCache.clear()
+
+    companion object {
+        val LOG = Logger.getLogger(PieceTreeSearchCache::class.java.name).apply { setFilter { false } }
     }
 }
 
@@ -274,7 +303,12 @@ class PieceTree(
     private var myLastVisitedLineNo = 0
     private var myLastVisitedLineValue = ""
 
-    private val mySearchCache = PieceTreeSearchCache(10)
+    // FIXME@thisisvolatile
+    // Either Microsoft's cache implementation depends on some eldritch
+    // index hacks or it's just me not really getting something,
+    // but this gives me random off-by-one misses.
+    // Also, tbh, it needs to be redesigned.
+    private val mySearchCache = PieceTreeSearchCache(0)
 
     /**
      * Outputs the internal structure of this [PieceTree] for the debug purposes.
@@ -379,10 +413,15 @@ class PieceTree(
     fun getLinesRawContent(): String {
         val resBuilder = StringBuilder()
 
+        if (myRoot == SENTINEL) return ""
+
         var travNode = myRoot.leftmostChild
+        require(travNode != SENTINEL) { "Trav node is sentinel!" }
         var totalTextLen = 0
 
-        while (totalTextLen != myTextLength) {
+        LOG.info("Getting lines raw content!")
+
+        while (totalTextLen < myTextLength) {
             val chunk = lookupChunkByDescriptor(travNode.piece.chunkDesc)
             val startOffset = getOffsetInChunk(travNode.piece.chunkDesc, travNode.piece.chunkStartPos)
 
@@ -394,9 +433,13 @@ class PieceTree(
 
         require(totalTextLen == myTextLength) { "Text len does not match!" }
 
+        LOG.info("Done getting lines raw content!")
         return resBuilder.toString()
     }
 
+    /**
+     * Returns a line with the line ending attached.
+     */
     fun getLineContent(lineNo: Int): String {
         if (myLastVisitedLineNo == lineNo) {
             return myLastVisitedLineValue
@@ -417,13 +460,15 @@ class PieceTree(
         val cacheEntry = mySearchCache.getEntryByLineNumber(lineNo)
         // If the cache lookup is successful, figure out how to return it.
         if (cacheEntry != null) {
+            require(cacheEntry.nodeStartLineNumber != null) { "nodeStartLineNumber was null" }
+
             travNode = cacheEntry.node
             val prevAccumulatedValue = travNode.getOffsetByLineStart(
-                lineNo - (cacheEntry.nodeStartLineNumber ?: 0) - 1
+                lineNo - cacheEntry.nodeStartLineNumber - 1
             )
             val chunk = lookupChunkByDescriptor(travNode.piece.chunkDesc)
             val startOffset = getOffsetInChunk(travNode.piece.chunkDesc, travNode.piece.chunkStartPos)
-            if ((cacheEntry.nodeStartLineNumber ?: 0) + travNode.piece.lineFeeds == lineNo) {
+            if (cacheEntry.nodeStartLineNumber + travNode.piece.lineFeeds == lineNo) {
                 returnBuffer.append(
                     chunk.chunkSubstring(
                         startOffset + prevAccumulatedValue,
@@ -431,7 +476,12 @@ class PieceTree(
                     )
                 )
             } else {
-                val accumulatedValue = travNode.getOffsetByLineStart(lineNo - cacheEntry.nodeStartOffset)
+                val accumulatedValue = travNode.getOffsetByLineStart(lineNo - cacheEntry.nodeStartLineNumber)
+                require(startOffset + accumulatedValue - endOffset > startOffset + prevAccumulatedValue) {
+                    "Weird offsets:\n\tstartOffset: $startOffset\n\taccumulatedValue: $accumulatedValue" +
+                            "\n\tprevAccValue: $prevAccumulatedValue\n\tendOffset: $endOffset" +
+                            "\n\tcacheEntry: $cacheEntry"
+                }
                 return chunk.chunkSubstring(
                     startOffset + prevAccumulatedValue,
                     startOffset + accumulatedValue - endOffset
@@ -466,7 +516,7 @@ class PieceTree(
 
                     return chunk.chunkSubstring(
                         startOffset + prevMemorizedOffset,
-                        startOffset + travNode.piece.textLen
+                        startOffset + memorizedOffset - endOffset
                     )
                 } else if (travNode.lineFeedsLeft + travNode.piece.lineFeeds == travNodeLineNo - 1) {
                     val prevAccumulatedValue =
@@ -525,12 +575,17 @@ class PieceTree(
         deleteAfter(beforeOffset - cnt, cnt)
     }
 
+    companion object {
+        val LOG = Logger.getLogger(Piece::class.java.name).apply { setFilter { false } }
+    }
+
     /**
      * Deletes [cnt] chars AFTER [afterOffset].
      *
      * If [cnt] is not provided, deletes a singe character.
      */
     fun deleteAfter(afterOffset: Int, cnt: Int = 1) {
+        LOG.info("Started delete! after $afterOffset, cnt $cnt")
         myLastVisitedLineNo = 0
         myLastVisitedLineValue = ""
 
@@ -543,6 +598,8 @@ class PieceTree(
             "[DELETE]: Some lookup was not possible due to invalid offsets!"
         }
 
+        val affectedOffsetStart = startLookup.nodeStartOffset
+
         val startNode = startLookup.node
         val endNode = endLookup.node
 
@@ -553,52 +610,68 @@ class PieceTree(
             if (startLookup.nodeStartOffset == afterOffset) {
                 if (cnt == startNode.piece.textLen) {
                     rbDelete(startNode)
+
                     recomputeGlobalTextMetadata()
+                    mySearchCache.invalidate()
                     return
                 }
+
                 startNode.deleteHead(endSplitPos)
-                mySearchCache.validate(afterOffset)
+
                 recomputeGlobalTextMetadata()
+                mySearchCache.invalidate()
                 return
             }
 
             if (startLookup.nodeStartOffset + startNode.piece.textLen == afterOffset + cnt) {
                 startNode.deleteTail(startSplitPos)
+
                 recomputeGlobalTextMetadata()
+                mySearchCache.invalidate()
                 return
             }
 
             // Otherwise, we should shrink a node (it is done with splitting)
             startNode.splitToRight(startSplitPos, endSplitPos)
+
             recomputeGlobalTextMetadata()
+            mySearchCache.invalidate()
             return
         }
 
         // The text we want to delete spans some nodes
+        require(startNode != endNode) { "Inconsistent delete node state!" }
+
         val nodesToDelete = mutableListOf<PieceTreeNode>()
 
         val startSplitPos = getEditorCursorPosition(startNode.piece, startLookup.pieceOffset)
         startNode.deleteTail(startSplitPos)
         mySearchCache.validate(afterOffset)
         if (startNode.piece.textLen == 0) {
+            LOG.info("Wiped start node!")
             nodesToDelete.add(startNode)
         }
 
         val endSplitPosInBuffer = getEditorCursorPosition(endNode.piece, endLookup.pieceOffset)
         endNode.deleteHead(endSplitPosInBuffer)
         if (endNode.piece.textLen == 0) {
+            LOG.info("Wiped end node!")
             nodesToDelete.add(endNode)
         }
 
         // We should delete the nodes in between
         var travNode = startNode.next
-        while (travNode != endNode) {
+        while (travNode != SENTINEL && travNode != endNode) {
             nodesToDelete.add(travNode)
             travNode = travNode.next
         }
 
+        LOG.info("Deleting nodes: $nodesToDelete")
+
         rbDelete(nodesToDelete)
+
         recomputeGlobalTextMetadata()
+        mySearchCache.invalidate()
     }
 
     /**
@@ -662,6 +735,9 @@ class PieceTree(
             } else {
                 node.insertStringToRightOfThis(str)
             }
+
+            recomputeGlobalTextMetadata()
+            mySearchCache.invalidate()
         } else {
             val pieces = commitStringToChunkAndMakePieces(str)
             var node = rbInsertNodeFromPieceLeft(null, pieces[0])
@@ -669,9 +745,8 @@ class PieceTree(
             for (i in 1 until pieces.size) {
                 node = rbInsertNodeFromPieceRight(node, pieces[i])
             }
+            recomputeGlobalTextMetadata()
         }
-
-        recomputeGlobalTextMetadata()
     }
 
     private fun getOffsetInChunk(bufferDescriptor: ChunkDescriptor, editorPos: ChunkLFOffset): Int {
@@ -794,7 +869,7 @@ class PieceTree(
                         prevLineStartOffset + travColNo - 1
                     )
                 } else {
-                    travColNo -= travNode.piece.textLen - prevLineStartOffset;
+                    travColNo -= travNode.piece.textLen - prevLineStartOffset
                     break
                 }
             } else {
@@ -823,7 +898,7 @@ class PieceTree(
                         travColNo - 1
                     )
                 } else {
-                    travColNo -= travNode.piece.textLen;
+                    travColNo -= travNode.piece.textLen
                 }
             }
 
@@ -1481,6 +1556,7 @@ class PieceTree(
         var textLength = 0
 
         while (travRoot != SENTINEL) {
+            LOG.info("Recompute step...")
             lineFeedsCnt += travRoot.lineFeedsLeft + travRoot.piece.lineFeeds
             textLength += travRoot.textLenLeft + travRoot.piece.textLen
             travRoot = travRoot.right
@@ -1488,6 +1564,7 @@ class PieceTree(
 
         myLineFeedsCnt = lineFeedsCnt
         myTextLength = textLength
+        LOG.info("Cache validation...")
         mySearchCache.validate(textLength)
     }
 

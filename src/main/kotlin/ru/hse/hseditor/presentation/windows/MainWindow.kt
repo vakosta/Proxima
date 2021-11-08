@@ -22,25 +22,37 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.FrameWindowScope
+import androidx.compose.ui.window.MenuBar
 import androidx.compose.ui.window.Window
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import ru.hse.hseditor.presentation.states.MainWindowState
 import ru.hse.hseditor.presentation.states.PanelState
 import ru.hse.hseditor.presentation.utils.VerticalSplittable
 import ru.hse.hseditor.presentation.views.CodeView
 import ru.hse.hseditor.presentation.views.FileTreeView
 import ru.hse.hseditor.presentation.views.Tab
-import kotlin.system.exitProcess
+import ru.hse.hseditor.presentation.views.dialogs.SwingFileDialog
+import ru.hse.hseditor.presentation.views.dialogs.SwingFileDialogKind
+import ru.hse.hseditor.presentation.views.dialogs.SwingAlertDialog
+import ru.hse.hseditor.presentation.views.dialogs.SwingConfirmDialog
+import java.net.CacheRequest
+import javax.swing.JFileChooser
+import kotlin.io.path.isDirectory
+import kotlin.io.path.isRegularFile
 
 @Composable
 fun MainWindow(state: MainWindowState) = Window(
     title = "HSEditor",
     state = state,
-    onCloseRequest = { exitProcess(0) /* TODO some other handling obv required */ },
+    onCloseRequest = { runBlocking { state.interruptableExit() } },
     onKeyEvent = { state.onKeyEvent(it) }
 ) {
     val animatedSize = if (state.panelState.splitter.isResizing) {
@@ -51,6 +63,8 @@ fun MainWindow(state: MainWindowState) = Window(
             SpringSpec(stiffness = Spring.StiffnessLow)
         ).value
     }
+
+    MainWindowMenuBar(state)
 
     VerticalSplittable(
         modifier = Modifier.fillMaxSize(),
@@ -71,16 +85,16 @@ fun MainWindow(state: MainWindowState) = Window(
                     .fillMaxWidth()
                     .border(width = 0.5.dp, color = Color(209, 209, 209))
             ) {
-                items(state.editorStates) { editorState ->
+                items(state.editorStateDescs) { editorStateDesc ->
                     Tab(
-                        state = editorState,
-                        onClick = { state.activeEditorState = editorState },
-                        onClose = { state.closeEditor(editorState) },
+                        state = editorStateDesc.editorState,
+                        onClick = { state.activeEditorStateDesc = editorStateDesc },
+                        onClose = { state.closeEditor(editorStateDesc) },
                     )
                 }
             }
             CodeView(
-                isVisible = state.editorStates.isNotEmpty(),
+                isVisible = state.editorStateDescs.isNotEmpty(),
                 code = state.renderedContent,
                 onPointMove = state::onPointMove,
                 onPointChangeState = state::onPointChangeState,
@@ -88,6 +102,106 @@ fun MainWindow(state: MainWindowState) = Window(
                 onGloballyPositioned = { state.updateRenderedContent(it.size.width, it.size.height) }
             )
         }
+    }
+
+    //region Dialogs
+
+    if (state.dialogs.openDirectory.isAwaiting) {
+        SwingFileDialog(
+            "Open directory...",
+            SwingFileDialogKind.OPEN,
+            onPathChosen = {
+                if (it?.isDirectory() == true) {
+                    state.dialogs.openDirectory.onResult(it)
+                }
+            },
+            fileSelectionModeInt = JFileChooser.DIRECTORIES_ONLY
+        )
+    }
+
+    if (state.dialogs.confirmFileUpdateFromDisc.isAwaiting) {
+        SwingConfirmDialog(
+            "File updated on disc",
+            "Files were updated on disc. Do you wish to reload them?",
+            onOptionChosen = { state.dialogs.confirmFileUpdateFromDisc.onResult(it) }
+        )
+    }
+
+    if (state.dialogs.alertFileRemovedFromDisc.isAwaiting) {
+        SwingAlertDialog(
+            "File removed from disc",
+            "Some active file was removed from disc. It's editor will be closed. Sorry!",
+            onOptionChosen = { state.dialogs.alertFileRemovedFromDisc.onResult(it) }
+        )
+    }
+
+    if (state.dialogs.cantMakeFile.isAwaiting) {
+        SwingAlertDialog(
+            "Can't make a file!",
+            "Can't make a virtual file with a specified path!",
+            onOptionChosen = { state.dialogs.cantMakeFile.onResult(it) }
+        )
+    }
+
+    if (state.dialogs.confirmExit.isAwaiting) {
+        SwingConfirmDialog(
+            "Exit",
+            "Do you really want to exit?",
+            onOptionChosen = { state.dialogs.confirmExit.onResult(it) }
+        )
+    }
+
+    if (state.dialogs.chooseFilePath.isAwaiting) {
+        SwingFileDialog(
+            "Open a file...",
+            SwingFileDialogKind.OPEN,
+            onPathChosen = {
+                state.dialogs.chooseFilePath.onResult(it)
+            },
+            fileSelectionModeInt = JFileChooser.FILES_AND_DIRECTORIES
+        )
+    }
+
+    if (state.dialogs.illegalPath.isAwaiting) {
+        SwingAlertDialog(
+            "Illegal path",
+            "The chosen path is illegal for a file! Please, choose a file!",
+            onOptionChosen = { state.dialogs.illegalPath.onResult(it) }
+        )
+    }
+
+    if (state.dialogs.pathNotMounted.isAwaiting) {
+        SwingAlertDialog(
+            "Path not mounted",
+            "Path is not in the project model, can't create a file. " +
+                    "The author didn't want to add support for external virtual files. What a bummer.",
+            onOptionChosen = { state.dialogs.pathNotMounted.onResult(it) }
+        )
+    }
+
+    //endregion
+
+}
+
+@Composable
+private fun FrameWindowScope.MainWindowMenuBar(state: MainWindowState) = MenuBar {
+    val scope = rememberCoroutineScope()
+
+    fun save() = scope.launch { state.saveActiveEditor() }
+    fun saveAs() = scope.launch { state.saveActiveEditorAs() }
+
+    fun openDirectory() = scope.launch { state.openDirectory() }
+    fun exit() = scope.launch { state.interruptableExit() }
+
+    fun newTab() = scope.launch { state.createSourceAndOpenDocument() }
+
+    Menu("File") {
+        Item("New file with tab", onClick = { newTab() })
+        Item("Open folder...", onClick = { openDirectory() })
+        Item("Save", onClick = { save() })
+        Item("Save as...", onClick = { saveAs() })
+        Separator()
+        Item("Exit", onClick = { exit() })
     }
 }
 

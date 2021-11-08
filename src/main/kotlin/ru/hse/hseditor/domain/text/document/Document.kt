@@ -1,31 +1,80 @@
 package ru.hse.hseditor.domain.text.document
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import ru.hse.hseditor.domain.highlights.TextState
 import ru.hse.hseditor.domain.text.PieceTree
 
+abstract class DocumentSource {
+    abstract suspend fun makeDocument(): Document?
+    abstract suspend fun rememberOpenedDocument(document: Document)
+    abstract suspend fun refreshOpenedDocument(document: Document)
+
+    abstract suspend fun rememberExternalDocument(document: Document)
+
+    val openedDocuments = mutableListOf<Document>()
+}
 
 interface Document {
-    fun fetchLinesSequence(range: IntRange): Sequence<String>
+    fun lines(range: IntRange): Sequence<String>
+    fun lines(): Sequence<String>
 
+    fun getRawContent(): String
 
-    val isSyncedWithDisc: Boolean
+    var isSyncedWithDisc: Boolean
+
     val lineCount: Int
+    val textLength: Int
+
+    fun getLineContent(lineNo: Int): String
+    fun deleteCharAfter(offset: Int, cnt: Int = 1)
+    fun insert(str: String, atOffset: Int)
+
+    var textState: TextState
+    val source: DocumentSource?
+
+    suspend fun writeToMainSource() {
+        source?.rememberOpenedDocument(this)
+    }
+
+    suspend fun updateFromSource() {
+        source?.refreshOpenedDocument(this)
+    }
+
+    suspend fun writeToSecondarySource(source: DocumentSource) {
+        source.rememberExternalDocument(this)
+    }
 }
 
 class PieceTreeDocument(
-    val text: PieceTree
+    override val source: DocumentSource?,
+    private val myPieceTree: PieceTree
 ) : Document {
+    override var isSyncedWithDisc: Boolean by mutableStateOf(true)
 
-    // Add in a text buffer.
+    override val lineCount get() = myPieceTree.lineCount
+    override val textLength get() = myPieceTree.textLength
 
-    override val isSyncedWithDisc get() = myIsSyncedWithDisc
-    private var myIsSyncedWithDisc = true
+    override lateinit var textState: TextState
 
-    override val lineCount get() = text.lineCount
+    override fun getLineContent(lineNo: Int) = myPieceTree.getLineContent(lineNo)
 
-    override fun fetchLinesSequence(range: IntRange) = sequence {
-        range.forEach { yield(text.getLineContent(it)) }
+    override fun deleteCharAfter(offset: Int, cnt: Int) {
+        myPieceTree.deleteAfter(offset, cnt)
+        isSyncedWithDisc = false
     }
 
-    fun fetchLines(range: IntRange) {
+    override fun insert(str: String, atOffset: Int) {
+        myPieceTree.insert(str, atOffset)
+        isSyncedWithDisc = false
     }
+
+    override fun lines(range: IntRange) = sequence {
+        range.forEach { yield(myPieceTree.getLineContent(it)) }
+    }
+
+    override fun lines() = lines(1..lineCount)
+
+    override fun getRawContent() = myPieceTree.getLinesRawContent()
 }

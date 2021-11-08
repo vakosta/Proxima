@@ -1,24 +1,31 @@
-package ru.hse.hseditor.domain.app.locks
+package ru.hse.hseditor.domain.common.locks
 
 import kotlinx.coroutines.runBlocking
-import ru.hse.hseditor.domain.app.lifetimes.Lifetime
-import ru.hse.hseditor.domain.app.exceptions.ActionNotExecutedException
+import ru.hse.hseditor.domain.common.lifetimes.Lifetime
+import ru.hse.hseditor.domain.common.exceptions.ActionNotExecutedException
 
 fun <T> runBlockingRead(block: () -> T, canExecuteBlock: (() -> Boolean)? = null): T {
     val readAction = object : ReadAction<T>() {
         var result: T? = null
-        override fun execute() { result = block() }
+        override fun execute() {
+            result = block()
+        }
+
         override fun canExecute() = if (canExecuteBlock != null) canExecuteBlock() else true
         override fun collectResult() = result ?: throw ActionNotExecutedException("Result is null!")
     }
 
     return runBlocking {
+        readAction.actionContext = coroutineContext
         LocksGate.acquireReadActionLock(readAction)
 
         readAction.execute()
+        LocksGate.letGoReadActionLock(readAction)
         readAction.collectResult()
     }
 }
+
+fun <T> runBlockingRead(block: () -> T) = runBlockingRead<T>(block, null)
 
 fun runBlockingWrite(block: () -> Unit, canExecuteBlock: (() -> Boolean)? = null) {
     val writeAction = object : WriteAction() {
@@ -26,7 +33,8 @@ fun runBlockingWrite(block: () -> Unit, canExecuteBlock: (() -> Boolean)? = null
         override fun canExecute() = if (canExecuteBlock != null) canExecuteBlock() else true
     }
 
-     runBlocking {
+    runBlocking {
+        writeAction.actionContext = coroutineContext
         val interruptedActions = LocksGate.acquireWriteActionLock(writeAction)
         writeAction.execute()
 
@@ -34,12 +42,20 @@ fun runBlockingWrite(block: () -> Unit, canExecuteBlock: (() -> Boolean)? = null
         for (action in interruptedActions) {
             action.lifetime.scopedLaunch { action.execute() }
         }
+        LocksGate.letGoWriteActionLock()
     }
+}
+
+fun runBlockingWrite(block: () -> Unit) {
+    runBlockingWrite(block, null)
 }
 
 fun Lifetime.runBackgroundRead(block: () -> Unit, canExecuteBlock: (() -> Boolean)? = null) {
     val readAction = object : ReadAction<Unit>() {
-        override fun execute() { block() }
+        override fun execute() {
+            block()
+        }
+
         override fun canExecute() = if (canExecuteBlock != null) canExecuteBlock() else true
         override fun collectResult() = Unit
     }
@@ -47,8 +63,11 @@ fun Lifetime.runBackgroundRead(block: () -> Unit, canExecuteBlock: (() -> Boolea
     scopedLaunch {
         LocksGate.acquireReadActionLock(readAction)
         readAction.execute()
+        LocksGate.letGoReadActionLock(readAction)
     }
 }
+
+fun Lifetime.runBackgroundRead(block: () -> Unit) = runBackgroundRead(block, null)
 
 fun Lifetime.runBackgroundWrite(block: () -> Unit, canExecuteBlock: (() -> Boolean)? = null) {
     val writeAction = object : WriteAction() {

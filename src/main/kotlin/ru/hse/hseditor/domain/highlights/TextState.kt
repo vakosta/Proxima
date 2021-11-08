@@ -1,26 +1,42 @@
 package ru.hse.hseditor.domain.highlights
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import com.lodborg.intervaltree.IntegerInterval
 import com.lodborg.intervaltree.Interval
 import com.lodborg.intervaltree.IntervalTree
 import ru.hse.hseditor.data.CharParameters
 import ru.hse.hseditor.data.HighlightInterval
+import ru.hse.hseditor.domain.common.lifetimes.Lifetime
 import ru.hse.hseditor.domain.common.COLOR_BLACK
+import ru.hse.hseditor.domain.common.Event
 import ru.hse.hseditor.domain.common.TOKEN_COLORS
 import ru.hse.hseditor.domain.highlights.syntaxmanager.KotlinSyntaxManager
 import ru.hse.hseditor.domain.highlights.syntaxmanager.SyntaxManager
-import ru.hse.hseditor.domain.text.PieceTree
-import ru.hse.hseditor.domain.text.PieceTreeBuilder
+import ru.hse.hseditor.domain.text.document.Document
 import java.util.logging.Level
 import java.util.logging.Logger
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
+enum class ExtModificationKind {
+    DOCUMENT_DISC_SYNC,
+    /* PSI_MODIFICATION, */
+    /* REFORMAT, */
+    /* ... etc ... */
+
+    DOCUMENT_DELETED
+}
+
+// May have to attach some more data in the future
+data class ExtModificationDesc(val kind: ExtModificationKind)
+
 class TextState(
-    val text: String,
+    private val myLifetime: Lifetime,
     val language: Language,
-    val pieceTree: PieceTree = PieceTreeBuilder().build(),
+    var document: Document,
     val highlights: IntervalTree<Int> = IntervalTree<Int>(),
     var firstSelectionPosition: Int? = null,
     var secondSelectionPosition: Int? = null,
@@ -34,15 +50,23 @@ class TextState(
                 KotlinSyntaxManager {}
         }
 
+    val externalModificationEvent = Event<ExtModificationDesc>("TextState::externalModificationEvent")
+
+    init {
+        document.textState = this
+        fillHighlights(document.getRawContent())
+    }
+
     private val currentLine: String
         get() {
-            val output = pieceTree.getLineContent(caretLine + 1)
+            val output = document.getLineContent(caretLine + 1)
             return try {
                 output.substring(0, output.indexOfFirst { it == '\n' })
             } catch (e: StringIndexOutOfBoundsException) {
                 output
             }
         }
+
     var caretAbsoluteOffset = 0
         private set
     var caretLine = 0
@@ -88,7 +112,7 @@ class TextState(
     }
 
     fun onPressedDownArrow(withSelection: Boolean) {
-        if (caretLine != pieceTree.lineCount - 1) {
+        if (caretLine != document.lineCount - 1) {
             val currentLineOffset = currentLine.length - caretLineOffset
             caretLine++
             val nextLineOffset = min(caretLineOffset, currentLine.length)
@@ -96,7 +120,7 @@ class TextState(
             caretAbsoluteOffset += excessCharNumber + 1
             caretLineOffset = min(caretLineOffset, currentLine.length)
         } else {
-            caretAbsoluteOffset = pieceTree.textLength
+            caretAbsoluteOffset = document.textLength
             caretLineOffset = currentLine.length
         }
         updateSelection(withSelection)
@@ -116,8 +140,8 @@ class TextState(
     }
 
     fun onPressedRightArrow(withSelection: Boolean) {
-        caretAbsoluteOffset = min(caretAbsoluteOffset + 1, pieceTree.textLength)
-        if (caretLineOffset == currentLine.length && caretLine < pieceTree.lineCount - 1) {
+        caretAbsoluteOffset = min(caretAbsoluteOffset + 1, document.textLength)
+        if (caretLineOffset == currentLine.length && caretLine < document.lineCount - 1) {
             caretLine++
             caretLineOffset = 0
         } else if (caretLineOffset != currentLine.length) {
@@ -128,19 +152,19 @@ class TextState(
     }
 
     fun onPressedBackspace() {
-        pieceTree.deleteAfter(caretAbsoluteOffset - 1)
+        document.deleteCharAfter(caretAbsoluteOffset - 1)
         updateCurrentLineHighlights(-1)
         onPressedLeftArrow(false)
     }
 
     fun onTypedChar(char: Char) {
-        pieceTree.insert(char.toString(), caretAbsoluteOffset, true)
+        document.insert(char.toString(), caretAbsoluteOffset)
         updateCurrentLineHighlights(1)
         onPressedRightArrow(false)
     }
 
     fun onAddText(text: String) {
-        pieceTree.insert(text, caretAbsoluteOffset, true)
+        document.insert(text, caretAbsoluteOffset)
         updateCurrentLineHighlights(text.length)
         for (i in text.indices) { // FIXME: Slow iterator
             onPressedRightArrow(false)
@@ -199,6 +223,9 @@ class TextState(
         }
     }
 
+    // thisisvolatile: this is weird, but we have
+    // to roll with an external interval tree impl
+    @Suppress("UNCHECKED_CAST")
     private fun getHighlights(position: Int): Set<HighlightInterval> =
         highlights.query(position) as Set<HighlightInterval>
 
@@ -216,6 +243,6 @@ class TextState(
     }
 
     companion object {
-        val LOG = Logger.getLogger(TextState::class.java.name)
+        val LOG = Logger.getLogger(TextState::class.java.name).apply { setFilter { false } }
     }
 }

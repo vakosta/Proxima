@@ -1,8 +1,9 @@
-package ru.hse.hseditor.domain.app.locks
+package ru.hse.hseditor.domain.common.locks
 
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.job
-import ru.hse.hseditor.domain.app.lifetimes.Lifetime
+import ru.hse.hseditor.domain.common.Event
+import ru.hse.hseditor.domain.common.lifetimes.Lifetime
 import kotlin.coroutines.CoroutineContext
 
 abstract class CoroutineAction internal constructor() {
@@ -23,6 +24,7 @@ interface InterruptableAction {
 abstract class WriteAction internal constructor() : CoroutineAction()
 
 abstract class ReadAction<T> internal constructor() : CoroutineAction() {
+
     abstract fun collectResult(): T
 }
 

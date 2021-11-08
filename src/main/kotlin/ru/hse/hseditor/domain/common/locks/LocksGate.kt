@@ -1,7 +1,9 @@
-package ru.hse.hseditor.domain.app.locks
+package ru.hse.hseditor.domain.common.locks
 
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+
+// TODO @thisisvolatile DOES NOT handle reetrancy :(((
 
 internal object LocksGate {
 
@@ -18,6 +20,12 @@ internal object LocksGate {
         myDispatchMutex.withLock {
             myOngoingWriteAction?.join()
             myOngoingReadActionSet.add(readAction)
+        }
+    }
+
+    suspend fun <T> letGoReadActionLock(readAction: ReadAction<T>) {
+        myDispatchMutex.withLock {
+            myOngoingReadActionSet.remove(readAction)
         }
     }
 
@@ -43,5 +51,11 @@ internal object LocksGate {
         }
 
         return interruptedActions
+    }
+
+    suspend fun letGoWriteActionLock() {
+        myDispatchMutex.withLock {
+            myOngoingWriteAction = null
+        }
     }
 }

@@ -1,21 +1,36 @@
 package ru.hse.hseditor
 
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.window.application
 import org.koin.core.context.startKoin
-import ru.hse.hseditor.domain.app.lifetimes.defineLifetime
-import ru.hse.hseditor.domain.common.fileSystemModule
+import ru.hse.hseditor.domain.common.lifetimes.defineLifetime
 import ru.hse.hseditor.domain.common.highlightsModule
 import ru.hse.hseditor.presentation.states.MainWindowState
 import ru.hse.hseditor.presentation.windows.MainWindow
+import javax.swing.SwingUtilities
+import javax.swing.UIManager
+import kotlin.system.exitProcess
 
-fun main() = application {
+fun main() {
+    // Some dark Swing magic
+    SwingUtilities.invokeLater { UIManager.setLookAndFeel(UIManager.getCrossPlatformLookAndFeelClassName()) }
+    // Some dark Koin magic
     startKoin {
         modules(
             highlightsModule,
-            fileSystemModule,
         )
     }
-    val mainWindowLifetime = defineLifetime("MainWindow Lifetime")
-    val state = MainWindowState(mainWindowLifetime.lifetime)
-    MainWindow(state)
+    // Some dark lifetime magic
+    val mainWindowLifetimeDef = defineLifetime("MainWindow Lifetime")
+
+    application {
+        val state = MainWindowState(mainWindowLifetimeDef.lifetime, onCloseRequest = {
+            mainWindowLifetimeDef.terminateLifetime()
+            exitApplication()
+            exitProcess(0)
+        })
+        MainWindow(
+            state = state
+        )
+    }
 }

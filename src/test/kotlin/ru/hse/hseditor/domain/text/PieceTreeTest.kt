@@ -5,7 +5,7 @@ import kotlin.test.assertEquals
 
 class PieceTreeTest {
 
-    private fun PieceTree.addCharByCharAndAssertWithPrefix(str: String, atOffset: Int, prefix: String = "") {
+    private fun PieceTree.addCharByCharAndAssertWithPrefix(str: String, atOffset: Int, prefix: String = this.getLinesRawContent().slice(0 until atOffset)) {
         val resBuilder = StringBuilder().apply { append(prefix) }
 
         for (i in str.indices) {
@@ -136,5 +136,52 @@ class PieceTreeTest {
         assertEquals("val kek = 123", pieceTree.getLinesRawContent())
         pieceTree.deleteAfter(6)
         assertEquals("val ke = 123", pieceTree.getLinesRawContent())
+    }
+
+    @Test
+    fun `the kot example (newlines) works`() {
+        val pieceTree = PieceTreeBuilder().build()
+
+        val str = "val kot = 123\nval kot = 123\nval kot = 123\nval kot = 123\n"
+        pieceTree.addCharByCharAndAssertWithPrefix(str, 0)
+        assertEquals(str, pieceTree.getLinesRawContent())
+    }
+
+    @Test
+    fun `newlines end lines`() {
+        val pieceTree = PieceTreeBuilder().build()
+
+        val line = "val kot = 123\n"
+        val str = "val kot = 123\nval kot = 123\nval kot = 123\nval kot = 123\n"
+        pieceTree.addCharByCharAndAssertWithPrefix(str, 0)
+        for (i in 1..4) {
+            assertEquals(line, pieceTree.getLineContent(i))
+        }
+    }
+
+    @Test
+    fun `stdio bug`() {
+        val pieceTree = PieceTreeBuilder().build()
+
+        pieceTree.addCharByCharAndAssertWithPrefix("#include <>", 0)
+
+        var offset = 10
+        for (ch in "std") {
+            pieceTree.insert(ch.toString(), offset)
+            offset += 1
+        }
+        println(pieceTree.getLinesRawContent())
+        pieceTree.deleteBefore(offset)
+        offset -= 1
+
+        val sb = StringBuilder().apply { append(pieceTree.getLinesRawContent()) }
+        for (ch in "dio.h") {
+            pieceTree.insert(ch.toString(), offset)
+            sb.insert(offset, ch)
+            assertEquals(sb.toString(), pieceTree.getLinesRawContent())
+            offset += 1
+        }
+
+        println(pieceTree.getLinesRawContent())
     }
 }

@@ -41,6 +41,16 @@ fun Tab(
                 .padding(all = 5.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (!state.textState.document.isSyncedWithDisc) {
+                Box(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .width(14.dp)
+                        .height(14.dp)
+                        .background(color = Color(59, 131, 189))
+                )
+            }
+            Spacer(Modifier.width(4.dp))
             Text(state.fileName)
             Spacer(Modifier.width(4.dp))
             Image(

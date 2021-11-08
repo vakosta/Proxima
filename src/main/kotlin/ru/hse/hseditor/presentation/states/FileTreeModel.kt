@@ -3,31 +3,51 @@ package ru.hse.hseditor.presentation.states
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import ru.hse.hseditor.presentation.model.File
+import ru.hse.hseditor.domain.common.lifetimes.defineLifetime
+import ru.hse.hseditor.domain.common.vfs.VFSNode
+import ru.hse.hseditor.presentation.model.FileModel
 
 class ExpandableFile(
-    val file: File,
+    val file: FileModel,
     val level: Int,
 ) {
+
+    // TODO fix lifetime management here.
+
+    private val myLifetimeDef = defineLifetime("ExpandableLifetime")
+
+    init {
+        if (file.hasChildren) {
+            file.children.onNewState.advise(myLifetimeDef.lifetime) {
+                children.forEach { it.myLifetimeDef.terminateLifetime() }
+                children = fileChildrenToExpandableChildren() // Repaint
+            }
+        }
+    }
+
+    private fun fileChildrenToExpandableChildren() = file.children
+        .map { ExpandableFile(it, level + 1) }
+        .sortedWith(compareBy({ it.file.isDirectory }, { it.file.name }))
+        .sortedBy { !it.file.isDirectory }
+
+
     var children: List<ExpandableFile> by mutableStateOf(emptyList())
     val canExpand: Boolean get() = file.hasChildren
 
     fun toggleExpanded() {
         children = if (children.isEmpty()) {
-            file.children
-                .map { ExpandableFile(it, level + 1) }
-                .sortedWith(compareBy({ it.file.isDirectory }, { it.file.name }))
-                .sortedBy { !it.file.isDirectory }
+            fileChildrenToExpandableChildren()
         } else {
             emptyList()
         }
     }
 }
 
-class FileTree(root: File, val openFile: (file: File) -> Unit) {
-    private val expandableRoot = ExpandableFile(root, 0)/*.apply {
-        toggleExpanded()
-    }*/
+class FileTreeModel(
+    val root: FileModel,
+    val openFile: suspend (file: FileModel) -> Unit
+) {
+    private val expandableRoot = ExpandableFile(root, 0).apply { toggleExpanded() }
 
     val items: List<Item> get() = expandableRoot.toItems()
 
@@ -45,7 +65,7 @@ class FileTree(root: File, val openFile: (file: File) -> Unit) {
                 ItemType.File(ext = file.file.name.substringAfterLast(".").lowercase())
             }
 
-        fun open() = when (type) {
+        suspend fun open() = when (type) {
             is ItemType.Folder ->
                 file.toggleExpanded()
             is ItemType.File ->
@@ -70,4 +90,15 @@ class FileTree(root: File, val openFile: (file: File) -> Unit) {
         addTo(list)
         return list
     }
+
+}
+
+fun FileTreeModel.findByVfsNode(node: VFSNode) = findByVfsNodeRec(root, node)
+
+// Depth-first traversal (SUBOPTIMAL)
+private fun findByVfsNodeRec(file: FileModel, node: VFSNode): FileModel? {
+    if (file.vfsNode == node) return file
+    if (!file.hasChildren) return null
+
+    return file.children.map { findByVfsNodeRec(it, node) }.firstNotNullOfOrNull { it }
 }

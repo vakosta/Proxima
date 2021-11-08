@@ -8,6 +8,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.utf16CodePoint
 import org.koin.core.component.KoinComponent
 import ru.hse.hseditor.data.CharCoordinates
+import ru.hse.hseditor.domain.common.lifetimes.Lifetime
 import ru.hse.hseditor.domain.highlights.TextState
 import ru.hse.hseditor.presentation.utils.isRelevant
 import java.awt.Toolkit
@@ -16,11 +17,12 @@ import kotlin.math.max
 import kotlin.math.min
 
 class EditorState(
+    private val myLifetime: Lifetime,
     var fileName: String,
     var isActive: Boolean = false,
-) : KoinComponent {
+    val textState: TextState
+) {
 
-    val textState: TextState = TextState(text = "", language = TextState.Language.Kotlin)
     var charCoordinates: MutableList<CharCoordinates> = mutableListOf()
 
     var verticalOffset: Float = 0F
