@@ -63,9 +63,9 @@ class SkijaBuilder(
             if (caretPosition == i && isShowCarriage) {
                 drawCarriage(canvas, paint)
             }
-            if (c != '\n') {
+            if (c != '\n' && 0 <= y && y <= height + 15) {
                 addChar(c, i, canvas, paint)
-            } else {
+            } else if (c == '\n') {
                 addNewLine(i)
             }
         }
