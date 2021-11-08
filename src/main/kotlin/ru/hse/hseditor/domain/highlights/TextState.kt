@@ -1,17 +1,14 @@
 package ru.hse.hseditor.domain.highlights
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import com.lodborg.intervaltree.IntegerInterval
 import com.lodborg.intervaltree.Interval
 import com.lodborg.intervaltree.IntervalTree
 import ru.hse.hseditor.data.CharParameters
 import ru.hse.hseditor.data.HighlightInterval
-import ru.hse.hseditor.domain.common.lifetimes.Lifetime
 import ru.hse.hseditor.domain.common.COLOR_BLACK
 import ru.hse.hseditor.domain.common.Event
 import ru.hse.hseditor.domain.common.TOKEN_COLORS
+import ru.hse.hseditor.domain.common.lifetimes.Lifetime
 import ru.hse.hseditor.domain.highlights.syntaxmanager.KotlinSyntaxManager
 import ru.hse.hseditor.domain.highlights.syntaxmanager.SyntaxManager
 import ru.hse.hseditor.domain.text.document.Document
@@ -206,8 +203,15 @@ class TextState(
         )
         val intervals = highlights.query(moveInterval)
         for (interval in intervals) {
-            (interval as HighlightInterval).start += offset
-            (interval as HighlightInterval).end += offset
+            highlights.remove(interval)
+            highlights.add(
+                HighlightInterval(
+                    start = interval.start + offset,
+                    end = interval.end + offset,
+                    params = (interval as HighlightInterval).params,
+                    astNode = interval.astNode,
+                )
+            )
         }
     }
 
