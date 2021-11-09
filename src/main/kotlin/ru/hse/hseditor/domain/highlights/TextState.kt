@@ -92,6 +92,10 @@ class TextState(
                 onPressedLeftArrow(withSelection)
             }
         }
+        // TODO: Refactor this block
+        if (!withSelection) {
+            clearSelectionPositions()
+        }
     }
 
     fun onPressedUpArrow(withSelection: Boolean) {
@@ -149,14 +153,32 @@ class TextState(
     }
 
     fun onPressedBackspace() {
-        document.deleteCharAfter(caretAbsoluteOffset - 1)
-        updateCurrentLineHighlights(-1)
-        onPressedLeftArrow(false)
+        if (firstSelectionPosition != null && secondSelectionPosition != null) {
+            var offset = 0
+            val minPosition = min(firstSelectionPosition!!, secondSelectionPosition!!)
+            val maxPosition = max(firstSelectionPosition!!, secondSelectionPosition!!)
+            offset -= maxPosition - minPosition
+            document.deleteCharAfter(minPosition, maxPosition - minPosition)
+            setCaretAbsoluteOffset(minPosition, false)
+            updateCurrentLineHighlights(offset)
+        } else {
+            document.deleteCharAfter(caretAbsoluteOffset - 1)
+            updateCurrentLineHighlights(-1)
+            onPressedLeftArrow(false)
+        }
     }
 
     fun onTypedChar(char: Char) {
+        var offset = 1
+        if (firstSelectionPosition != null && secondSelectionPosition != null) {
+            val minPosition = min(firstSelectionPosition!!, secondSelectionPosition!!)
+            val maxPosition = max(firstSelectionPosition!!, secondSelectionPosition!!)
+            offset -= maxPosition - minPosition
+            document.deleteCharAfter(minPosition, maxPosition - minPosition)
+            setCaretAbsoluteOffset(minPosition, false)
+        }
         document.insert(char.toString(), caretAbsoluteOffset)
-        updateCurrentLineHighlights(1)
+        updateCurrentLineHighlights(offset)
         onPressedRightArrow(false)
     }
 
