@@ -2,7 +2,11 @@
 ![logo](./img/demo.png)
 Simple text editor with highlighting.
 
-_Full description will be added later._
+## Installation and Running
+
+- Download the Proxima source code.
+- Run `./gradlew clean build`.
+- Run main method in `Main.kt`.
 
 ## Contact
 
