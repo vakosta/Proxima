@@ -8,7 +8,7 @@ plugins {
     antlr
 }
 
-group = "ru.hse"
+group = "me.vakosta"
 version = "1.0"
 
 val koinVersion = "3.1.2"
@@ -43,8 +43,8 @@ tasks {
     generateGrammarSource {
         maxHeapSize = "64m"
         arguments = arguments + listOf("-visitor", "-long-messages")
-        arguments = arguments + listOf("-package", "ru.hse.hseditor.antlr")
-        outputDirectory = File("$buildDir/generated-src/antlr/main/ru/hse/hseditor/antlr")
+        arguments = arguments + listOf("-package", "me.annenkov.proxima.antlr")
+        outputDirectory = File("$buildDir/generated-src/antlr/main/me/annenkov/proxima/antlr")
     }
 
     withType<KotlinCompile> {
@@ -59,10 +59,10 @@ tasks {
 
 compose.desktop {
     application {
-        mainClass = "ru.hse.hseditor.MainKt"
+        mainClass = "me.vakosta.proxima.MainKt"
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
-            packageName = "HSEditor"
+            packageName = "Proxima"
             packageVersion = "1.0.0"
         }
 
